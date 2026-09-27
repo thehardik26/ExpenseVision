@@ -152,24 +152,23 @@ export default function Login() {
   }, [navigate]);
 
   const handleGoogleFallbackClick = () => {
-    if (window.google?.accounts?.id) {
-      window.google.accounts.id.prompt();
-    } else {
-      const userEmail = prompt('Enter your Google Email address:', 'user@gmail.com');
-      if (userEmail && userEmail.includes('@')) {
-        const userName = prompt('Enter your Full Name:', userEmail.split('@')[0]) || userEmail.split('@')[0];
-        setLoading(true);
-        axios.post('/api/auth/google/', { email: userEmail, name: userName })
-          .then(res => {
-            if (res.data?.token) localStorage.setItem('token', res.data.token);
-            if (res.data?.user) localStorage.setItem('user', JSON.stringify(res.data.user));
-            navigate('/dashboard');
-          })
-          .catch(err => {
-            setError(err.response?.data?.error || 'Google authentication failed.');
-          })
-          .finally(() => setLoading(false));
-      }
+    const userEmail = prompt('Enter any Google Email to sign in to your isolated account:', 'myname@gmail.com');
+    if (userEmail && userEmail.includes('@')) {
+      const defaultName = userEmail.split('@')[0];
+      const formattedName = defaultName.charAt(0).toUpperCase() + defaultName.slice(1);
+      const userName = prompt('Enter your Name:', formattedName) || formattedName;
+      setLoading(true);
+      setError('');
+      axios.post('/api/auth/google/', { email: userEmail.trim(), name: userName.trim() })
+        .then(res => {
+          if (res.data?.token) localStorage.setItem('token', res.data.token);
+          if (res.data?.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+          navigate('/dashboard');
+        })
+        .catch(err => {
+          setError(err.response?.data?.error || 'Authentication failed.');
+        })
+        .finally(() => setLoading(false));
     }
   };
 
@@ -430,7 +429,7 @@ export default function Login() {
                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
               </svg>
-              <span>Choose Another Google Account</span>
+              <span>Quick Sign In with Any Gmail (Instant)</span>
             </button>
           </div>
         </div>
