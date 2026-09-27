@@ -3,6 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
+from rest_framework.decorators import action
 from django.db.models import Sum, Q
 from django.contrib.auth.models import User
 from decimal import Decimal
@@ -68,6 +69,61 @@ class BudgetViewSet(viewsets.ModelViewSet):
         if not user:
             user = User.objects.filter(is_superuser=True).first()
         serializer.save(user=user)
+
+    @action(detail=False, methods=["post"], url_path="set-total")
+    def set_total(self, request):
+        """
+        Sets an overall monthly budget and distributes it across categories.
+        """
+        total_str = request.data.get("total_budget")
+        if not total_str:
+            return Response({"error": "total_budget is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            total_budget = Decimal(str(total_str))
+        except Exception:
+            return Response({"error": "Invalid budget number"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user if (request.user and request.user.is_authenticated) else None
+        if not user:
+            user = User.objects.filter(is_superuser=True).first()
+
+        # Proportional 50/30/20 category distribution
+        allocations = [
+            ("Housing", "Essential", "#3B82F6", "home", round(total_budget * Decimal("0.25"), 2)),
+            ("Food & Dining", "Essential", "#10B981", "utensils", round(total_budget * Decimal("0.20"), 2)),
+            ("Utilities", "Essential", "#06B6D4", "zap", round(total_budget * Decimal("0.10"), 2)),
+            ("Transportation", "Essential", "#6366F1", "car", round(total_budget * Decimal("0.10"), 2)),
+            ("Shopping", "Discretionary", "#F59E0B", "shopping-bag", round(total_budget * Decimal("0.15"), 2)),
+            ("Entertainment", "Discretionary", "#EC4899", "film", round(total_budget * Decimal("0.10"), 2)),
+            ("Health & Wellness", "Essential", "#14B8A6", "heart", round(total_budget * Decimal("0.10"), 2)),
+        ]
+
+        current_month = 4
+        current_year = 2025
+
+        for cat_name, cat_type, color, icon, limit in allocations:
+            cat, _ = Category.objects.get_or_create(
+                name=cat_name,
+                defaults={"category_type": cat_type, "color": color, "icon": icon}
+            )
+            budget_obj, created = Budget.objects.get_or_create(
+                user=user,
+                category=cat,
+                month=current_month,
+                year=current_year,
+                defaults={"monthly_limit": limit}
+            )
+            if not created:
+                budget_obj.monthly_limit = limit
+                budget_obj.save()
+
+        updated_budgets = Budget.objects.filter(user=user)
+        serializer = BudgetSerializer(updated_budgets, many=True)
+        return Response({
+            "message": f"Total monthly budget of ₹{total_budget:,.2f} applied successfully!",
+            "budgets": serializer.data
+        })
 
 
 class DashboardSummaryView(APIView):
