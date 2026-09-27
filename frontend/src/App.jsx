@@ -5,11 +5,15 @@ import Reports from './pages/Reports';
 import Transactions from './pages/Transactions';
 import Budgets from './pages/Budgets';
 import Login from './pages/Login';
-import NotFound from './pages/NotFound'; // 1. Import NotFound
+import NotFound from './pages/NotFound';
+import PageMeta from './components/PageMeta';
 
 export default function App() {
   return (
     <BrowserRouter>
+      {/* Dynamic Page Metadata & Document Title Synchronizer */}
+      <PageMeta />
+
       <Routes>
         {/* Authentication Route */}
         <Route path="/login" element={<Login />} />
@@ -23,7 +27,7 @@ export default function App() {
           <Route path="budgets" element={<Budgets />} />
         </Route>
 
-        {/* 2. Catch-all 404 Route */}
+        {/* Catch-all 404 Route */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
