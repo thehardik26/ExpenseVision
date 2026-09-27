@@ -183,3 +183,13 @@ REST_FRAMEWORK = {
 
 
 
+
+# Unified Single-Site Frontend Serving (React SPA)
+FRONTEND_DIST = os.path.join(BASE_DIR.parent, 'frontend', 'dist')
+if os.path.isdir(FRONTEND_DIST):
+    WHITENOISE_ROOT = FRONTEND_DIST
+    TEMPLATES[0]['DIRS'] = [FRONTEND_DIST] + TEMPLATES[0]['DIRS']
+    STATICFILES_DIRS = [d for d in [
+        os.path.join(FRONTEND_DIST, 'assets'),
+        FRONTEND_DIST,
+    ] if os.path.isdir(d)] + STATICFILES_DIRS
