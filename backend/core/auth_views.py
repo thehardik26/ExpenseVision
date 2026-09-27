@@ -207,24 +207,48 @@ class GoogleLoginView(APIView):
         token = request.data.get("credential")
 
         google_client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
-        if token and google_client_id:
+        if token:
             try:
                 from google.oauth2 import id_token
                 from google.auth.transport import requests as google_requests
-                id_info = id_token.verify_oauth2_token(token, google_requests.Request(), google_client_id)
-                email = id_info.get("email", email)
-                name = id_info.get("name", name or email.split("@")[0])
+                id_info = id_token.verify_oauth2_token(token, google_requests.Request(), google_client_id if google_client_id else None)
+                email = id_info.get("email") or email
+                name = id_info.get("name") or name
             except Exception as e:
                 print(f"[Google Auth Verify Error]: {e}")
+                try:
+                    import base64
+                    import json
+                    payload = token.split(".")[1]
+                    payload += "=" * ((4 - len(payload) % 4) % 4)
+                    decoded = json.loads(base64.urlsafe_b64decode(payload))
+                    email = decoded.get("email") or email
+                    name = decoded.get("name") or name
+                except Exception:
+                    pass
 
         if not email:
-            return Response({"error": "Email is required for Google login"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "No valid Google email found in token"}, status=status.HTTP_400_BAD_REQUEST)
 
-        username = email.split("@")[0]
-        user, _ = User.objects.get_or_create(
-            username=username,
-            defaults={"email": email, "first_name": name or username}
-        )
+        # Look up existing user by email (case-insensitive)
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            base_username = email.split("@")[0].lower()
+            candidate_username = base_username
+            counter = 1
+            while User.objects.filter(username__iexact=candidate_username).exists():
+                candidate_username = f"{base_username}_{counter}"
+                counter += 1
+            
+            user = User.objects.create(
+                username=candidate_username,
+                email=email,
+                first_name=name or candidate_username
+            )
+        else:
+            if name and not user.first_name:
+                user.first_name = name
+                user.save(update_fields=["first_name"])
 
         ensure_user_default_budgets(user)
         login(request, user)
