@@ -1,12 +1,14 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import axios from 'axios';
-import { Plus, Camera, Sparkles } from 'lucide-react';
+import { Plus, Camera, Sparkles, Calendar } from 'lucide-react';
+
+const getTodayDateStr = () => new Date().toISOString().split('T')[0];
 
 export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
   const [txType, setTxType] = useState('Expense');
   const [category, setCategory] = useState('Shopping');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState('2025-04-17');
+  const [date, setDate] = useState(getTodayDateStr());
   const [merchant, setMerchant] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,7 +23,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
         transaction_type: txType,
         category_name: category,
         amount: parseFloat(amount),
-        date,
+        date: date || getTodayDateStr(),
         merchant,
         notes
       });
@@ -30,6 +32,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
       setAmount('');
       setMerchant('');
       setNotes('');
+      setDate(getTodayDateStr());
       if (onTransactionAdded) onTransactionAdded();
     } catch (err) {
       console.error("Failed to add transaction:", err);
@@ -46,7 +49,8 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
       setAmount("450.00");
       setCategory("Food & Drinks");
       setNotes(text);
-      alert("✨ Gemini AI auto-filled the transaction fields!");
+      setDate(getTodayDateStr());
+      alert("✓ Gemini AI auto-filled the transaction fields with today's date!");
     }
   };
 
@@ -55,7 +59,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-base font-bold text-slate-900">Add New Transaction</h2>
-          <p className="text-xs text-slate-400 mt-0.5">Quick record with Gemini AI assists</p>
+          <p className="text-xs text-slate-400 mt-0.5">Quick record with live real-time date</p>
         </div>
         <div className="flex gap-2.5">
           <button
@@ -87,7 +91,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
               className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-violet-500 focus:outline-none"
             >
               <option value="Expense">Expense</option>
-              <option value="Income">Income</option>
+              <option value="Income">Income (Salary / Earnings)</option>
             </select>
           </div>
 
@@ -123,7 +127,16 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
           </div>
 
           <div>
-            <label className="text-[11px] font-bold text-slate-600 block mb-1">Date</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold text-slate-600">Date</label>
+              <button
+                type="button"
+                onClick={() => setDate(getTodayDateStr())}
+                className="text-[10px] text-violet-600 font-bold hover:underline cursor-pointer"
+              >
+                Set Today
+              </button>
+            </div>
             <input
               type="date"
               value={date}
@@ -139,7 +152,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
             <label className="text-[11px] font-bold text-slate-600 block mb-1">Merchant / Payee</label>
             <input
               type="text"
-              placeholder="e.g. Amazon, Starbucks, Swiggy"
+              placeholder="e.g. Swiggy, Amazon, Employer Salary"
               value={merchant}
               onChange={e => setMerchant(e.target.value)}
               required
@@ -151,7 +164,7 @@ export default function TransactionForm({ onTransactionAdded, onOpenScanner }) {
             <label className="text-[11px] font-bold text-slate-600 block mb-1">Notes (optional)</label>
             <input
               type="text"
-              placeholder="e.g. Weekly team lunch"
+              placeholder="e.g. Weekly grocery run"
               value={notes}
               onChange={e => setNotes(e.target.value)}
               className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-violet-500 focus:outline-none"

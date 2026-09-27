@@ -1,6 +1,13 @@
-﻿import { Bell, ShieldCheck, ExternalLink } from 'lucide-react';
+﻿import { Bell, ShieldCheck, ExternalLink, Calendar } from 'lucide-react';
 
 export default function Topbar({ user }) {
+  const todayFormatted = new Date().toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  });
+
   return (
     <header className="h-[72px] bg-white border-b border-slate-200 px-8 flex items-center justify-between sticky top-0 z-30">
       <div className="flex items-center gap-4">
@@ -14,12 +21,18 @@ export default function Topbar({ user }) {
       </div>
       
       <div className="flex items-center gap-3">
+        {/* Real-time Current Date Pill */}
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold text-slate-700 shadow-2xs">
+          <Calendar size={14} className="text-violet-600" />
+          <span>{todayFormatted}</span>
+        </div>
+
         {user?.is_superuser && (
           <a
             href="http://127.0.0.1:8000/admin/"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm"
+            className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm"
           >
             <span>Django Admin</span>
             <ExternalLink size={13} className="opacity-70" />
@@ -27,7 +40,7 @@ export default function Topbar({ user }) {
         )}
 
         <button 
-          onClick={() => alert('ExpenseVision Alert: 3 budgets tracked in Indian Rupees (₹).')}
+          onClick={() => alert(`ExpenseVision: Real-time ledger updated for ${todayFormatted}`)}
           className="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-violet-600 relative transition cursor-pointer"
         >
           <Bell size={18} />

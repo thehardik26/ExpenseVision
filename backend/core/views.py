@@ -88,7 +88,10 @@ class BudgetViewSet(viewsets.ModelViewSet):
         if not user:
             user = User.objects.filter(is_superuser=True).first()
 
-        # Proportional 50/30/20 category distribution
+        today = date.today()
+        current_month = today.month
+        current_year = today.year
+
         allocations = [
             ("Housing", "Essential", "#3B82F6", "home", round(total_budget * Decimal("0.25"), 2)),
             ("Food & Dining", "Essential", "#10B981", "utensils", round(total_budget * Decimal("0.20"), 2)),
@@ -98,9 +101,6 @@ class BudgetViewSet(viewsets.ModelViewSet):
             ("Entertainment", "Discretionary", "#EC4899", "film", round(total_budget * Decimal("0.10"), 2)),
             ("Health & Wellness", "Essential", "#14B8A6", "heart", round(total_budget * Decimal("0.10"), 2)),
         ]
-
-        current_month = 4
-        current_year = 2025
 
         for cat_name, cat_type, color, icon, limit in allocations:
             cat, _ = Category.objects.get_or_create(
@@ -129,7 +129,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
 class DashboardSummaryView(APIView):
     """
     Returns user-isolated aggregated metrics for the 4 KPI cards, Expense Analytics bar chart,
-    Budget overview progress bars, and recent transactions.
+    Budget overview progress bars, and recent transactions based on real-time current date.
     """
     def get(self, request):
         user = request.user if (request.user and request.user.is_authenticated) else None
@@ -138,8 +138,9 @@ class DashboardSummaryView(APIView):
 
         ensure_user_default_budgets(user)
 
-        current_year = 2025
-        current_month = 4
+        today = date.today()
+        current_year = today.year
+        current_month = today.month
 
         user_txs = Transaction.objects.filter(user=user)
 
@@ -160,29 +161,37 @@ class DashboardSummaryView(APIView):
         total_balance = all_income - all_expense
         savings_total = income_total - expense_total
 
-        # Dynamic monthly metrics from user's actual transactions
-        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+        # Dynamic rolling 6-month metrics ending with current real-time month
+        month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        chart_labels = []
         expense_series = []
         income_series = []
 
-        for m_idx in range(1, 7):
+        for offset in range(5, -1, -1):
+            m = current_month - offset
+            y = current_year
+            while m <= 0:
+                m += 12
+                y -= 1
+
+            chart_labels.append(month_abbr[m - 1])
             m_exp = user_txs.filter(
                 transaction_type="Expense",
-                date__year=current_year,
-                date__month=m_idx
+                date__year=y,
+                date__month=m
             ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
             
             m_inc = user_txs.filter(
                 transaction_type="Income",
-                date__year=current_year,
-                date__month=m_idx
+                date__year=y,
+                date__month=m
             ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
 
             expense_series.append(float(m_exp))
             income_series.append(float(m_inc))
 
         monthly_series = {
-            "labels": month_names,
+            "labels": chart_labels,
             "expenses": expense_series,
             "income": income_series
         }
@@ -190,7 +199,9 @@ class DashboardSummaryView(APIView):
         recent_txs = user_txs[:5]
         recent_tx_serializer = TransactionSerializer(recent_txs, many=True)
 
-        budgets = Budget.objects.filter(user=user)
+        budgets = Budget.objects.filter(user=user, month=current_month, year=current_year)
+        if not budgets.exists():
+            budgets = Budget.objects.filter(user=user)
         budget_serializer = BudgetSerializer(budgets, many=True)
 
         savings_pct_str = "0.0% of income"
@@ -198,6 +209,9 @@ class DashboardSummaryView(APIView):
             savings_pct_str = f"{round((float(savings_total) / float(income_total)) * 100, 1)}% of income"
 
         return Response({
+            "current_date": today.isoformat(),
+            "current_month_name": today.strftime("%B"),
+            "current_year": current_year,
             "kpis": {
                 "total_balance": float(total_balance),
                 "balance_delta": "+15.2% vs last month" if total_balance > 0 else "₹0.00 recorded",
@@ -216,12 +230,16 @@ class DashboardSummaryView(APIView):
 
 class ReportsAnalyticsView(APIView):
     """
-    Returns user-isolated data for Donut Chart, Trend lines, and 6-month summaries.
+    Returns user-isolated data for Donut Chart, Trend lines, and rolling 6-month summaries.
     """
     def get(self, request):
         user = request.user if (request.user and request.user.is_authenticated) else None
         if not user:
             user = User.objects.filter(is_superuser=True).first()
+
+        today = date.today()
+        current_year = today.year
+        current_month = today.month
 
         user_txs = Transaction.objects.filter(user=user)
         categories = Category.objects.filter(category_type__in=["Essential", "Discretionary"])
@@ -240,30 +258,37 @@ class ReportsAnalyticsView(APIView):
                     "color": cat.color
                 })
 
-        total_income_6m = user_txs.filter(transaction_type="Income").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-        total_expense_6m = user_txs.filter(transaction_type="Expense").aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
-        net_savings_6m = total_income_6m - total_expense_6m
-
-        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]
+        month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        chart_labels = []
         trend_expenses = []
         trend_income = []
-        current_year = 2025
 
-        for m_idx in range(1, 7):
+        for offset in range(5, -1, -1):
+            m = current_month - offset
+            y = current_year
+            while m <= 0:
+                m += 12
+                y -= 1
+
+            chart_labels.append(month_abbr[m - 1])
             m_exp = user_txs.filter(
                 transaction_type="Expense",
-                date__year=current_year,
-                date__month=m_idx
+                date__year=y,
+                date__month=m
             ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
             
             m_inc = user_txs.filter(
                 transaction_type="Income",
-                date__year=current_year,
-                date__month=m_idx
+                date__year=y,
+                date__month=m
             ).aggregate(t=Sum("amount"))["t"] or Decimal("0.00")
 
             trend_expenses.append(float(m_exp))
             trend_income.append(float(m_inc))
+
+        total_income_6m = sum(trend_income)
+        total_expense_6m = sum(trend_expenses)
+        net_savings_6m = total_income_6m - total_expense_6m
 
         return Response({
             "category_breakdown": category_shares,
@@ -273,7 +298,7 @@ class ReportsAnalyticsView(APIView):
                 "net_savings": float(net_savings_6m)
             },
             "trend_line": {
-                "labels": month_names,
+                "labels": chart_labels,
                 "income": trend_income,
                 "expenses": trend_expenses
             }

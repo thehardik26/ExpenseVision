@@ -1,14 +1,19 @@
 ﻿from decimal import Decimal
+from datetime import date
 from .models import Category, Budget
 
 def ensure_user_default_budgets(user):
     """
-    Creates starter category budgets for a user if they don't have any budgets.
+    Creates starter category budgets for a user if they don't have any budgets for current month.
     """
     if not user or not getattr(user, "is_authenticated", False):
         return
 
-    if Budget.objects.filter(user=user).exists():
+    today = date.today()
+    current_month = today.month
+    current_year = today.year
+
+    if Budget.objects.filter(user=user, month=current_month, year=current_year).exists():
         return
 
     default_categories = [
@@ -19,9 +24,6 @@ def ensure_user_default_budgets(user):
         ("Entertainment", "Discretionary", "#EC4899", "film", Decimal("2500.00")),
         ("Health & Wellness", "Essential", "#14B8A6", "heart", Decimal("2000.00")),
     ]
-
-    current_month = 4
-    current_year = 2025
 
     for cat_name, cat_type, color, icon, limit in default_categories:
         cat, _ = Category.objects.get_or_create(

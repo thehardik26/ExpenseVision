@@ -100,8 +100,8 @@ export default function Budgets() {
           category_name: categoryName,
           monthly_limit: parseFloat(monthlyLimit),
           category_type: categoryType,
-          month: 4,
-          year: 2025
+          month: new Date().getMonth() + 1,
+          year: new Date().getFullYear()
         });
       }
     } catch (err) {
@@ -142,7 +142,7 @@ export default function Budgets() {
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Monthly Budgets</h2>
             <span className="bg-violet-100 text-violet-700 text-xs font-bold px-2.5 py-0.5 rounded-full">
-              April 2025
+              {new Date().toLocaleString('en-IN', { month: 'long', year: 'numeric' })}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -496,3 +496,4 @@ export default function Budgets() {
     </div>
   );
 }
+
