@@ -1,4 +1,4 @@
-﻿from django.db import models
+from django.db import models
 from django.contrib.auth.models import User
 from decimal import Decimal
 
@@ -61,8 +61,9 @@ class Budget(models.Model):
         return f"[{user_name}] {self.category.name} Budget: ₹{self.monthly_limit} ({self.month}/{self.year})"
 
 class AIChatHistory(models.Model):
-    session_id = models.CharField(max_length=100, db_index=True)
-    role = models.CharField(max_length=10, choices=[("user", "User"), ("model", "Gemini AI")])
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name="chat_history")
+    session_id = models.CharField(max_length=100, db_index=True, default="default")
+    role = models.CharField(max_length=20, choices=[("user", "User"), ("assistant", "Assistant"), ("model", "AI")])
     message = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -70,4 +71,6 @@ class AIChatHistory(models.Model):
         ordering = ["created_at"]
         
     def __str__(self):
-        return f"[{self.role}] {self.message[:40]}..."
+        user_name = self.user.username if self.user else self.session_id
+        return f"[{user_name}][{self.role}] {self.message[:40]}..."
+

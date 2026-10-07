@@ -1,4 +1,4 @@
-﻿from rest_framework import serializers
+from rest_framework import serializers
 from .models import Category, Transaction, Budget, AIChatHistory
 from django.db.models import Sum
 from decimal import Decimal
@@ -96,4 +96,5 @@ class BudgetSerializer(serializers.ModelSerializer):
 class AIChatHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = AIChatHistory
-        fields = ["id", "session_id", "role", "message", "created_at"]
+        fields = ["id", "user", "session_id", "role", "message", "created_at"]
+

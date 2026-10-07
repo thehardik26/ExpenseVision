@@ -1,4 +1,4 @@
-﻿from . import ai_services
+from . import ai_services
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -333,6 +333,38 @@ class AIChatView(APIView):
         user = request.user if (request.user and request.user.is_authenticated) else None
         reply = ai_service.chat_advisor(message, session_id=session_id, user=user)
         return Response({"reply": reply})
+
+
+class AIChatHistoryView(APIView):
+    """
+    Retrieves and manages conversational chat history.
+    User-isolated: When authenticated, returns messages linked to the user account.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        user = request.user if (request.user and request.user.is_authenticated) else None
+        session_id = request.query_params.get("session_id", "default")
+        
+        if user:
+            history_qs = AIChatHistory.objects.filter(user=user).order_by("created_at")
+        else:
+            history_qs = AIChatHistory.objects.filter(session_id=session_id).order_by("created_at")
+
+        serializer = AIChatHistorySerializer(history_qs, many=True)
+        return Response(serializer.data)
+
+    def delete(self, request):
+        user = request.user if (request.user and request.user.is_authenticated) else None
+        session_id = request.query_params.get("session_id", "default")
+
+        if user:
+            deleted_count, _ = AIChatHistory.objects.filter(user=user).delete()
+        else:
+            deleted_count, _ = AIChatHistory.objects.filter(session_id=session_id).delete()
+
+        return Response({"message": "Chat history cleared successfully", "deleted": deleted_count})
+
 
 
 class NaturalLanguageParseView(APIView):

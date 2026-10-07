@@ -1,9 +1,11 @@
-﻿# Environment variables (Never commit API keys)
+# Environment variables (Never commit API keys)
 .env
 .env.*
 *.env
 backend/.env
 frontend/.env
+!.env.example
+!backend/.env.example
 
 # Python / Django
 __pycache__/
