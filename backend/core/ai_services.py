@@ -100,58 +100,111 @@ class GoogleGeminiService:
         if self.client and image_file:
             try:
                 image_bytes = image_file.read()
-                prompt = """
-                Analyze this receipt and extract:
-                {
-                  "merchant": "Store Name",
+                image_file.seek(0)  # Rewind file pointer for subsequent processing/storage
+                mime_type = getattr(image_file, 'content_type', 'image/jpeg')
+                if not mime_type or mime_type == 'application/octet-stream':
+                    mime_type = 'image/jpeg'
+
+                today_iso = str(date.today())
+                prompt = f"""
+                Analyze this bill, invoice, or receipt image carefully and extract financial details into JSON:
+                {{
+                  "merchant": "Store or Vendor Name",
                   "amount": float,
-                  "date": "YYYY-MM-DD",
-                  "category": "Food & Drinks | Shopping | Transportation | Entertainment | Bills & Utilities | Housing | Groceries | Other",
+                  "date": "{today_iso}",
+                  "category": "Food & Drinks | Shopping | Transportation | Entertainment | Bills & Utilities | Housing | Groceries | Health & Wellness | Other",
                   "tax": float,
-                  "notes": "Brief summary of purchased items"
-                }
-                Return ONLY valid JSON.
+                  "notes": "Brief summary of key items purchased"
+                }}
+                Extract the exact final total amount paid. If date is not found or ambiguous, use "{today_iso}".
+                Return ONLY valid JSON matching this schema.
                 """
-                response = self.client.models.generate_content(
-                    model='gemini-3.5-flash-lite',
-                    contents=[
-                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                        prompt
-                    ]
-                )
-                raw_text = response.text.strip().replace('```json', '').replace('```', '')
-                return json.loads(raw_text)
+                for model_candidate in ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']:
+                    try:
+                        response = self.client.models.generate_content(
+                            model=model_candidate,
+                            contents=[
+                                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                                prompt
+                            ]
+                        )
+                        raw_text = response.text.strip().replace('```json', '').replace('```', '')
+                        parsed = json.loads(raw_text)
+                        if parsed and 'amount' in parsed:
+                            try:
+                                parsed['amount'] = float(parsed['amount'])
+                            except (ValueError, TypeError):
+                                parsed['amount'] = 0.0
+                            if not parsed.get('date'):
+                                parsed['date'] = today_iso
+                            return parsed
+                    except Exception as model_err:
+                        print(f"[Gemini Vision {model_candidate}]: {model_err}")
+                        continue
             except Exception as e:
                 print(f"[Gemini Vision OCR Error]: {e}")
+                if image_file:
+                    try:
+                        image_file.seek(0)
+                    except Exception:
+                        pass
 
-        # Intelligent simulation fallback if image or API unavailable
+        # Intelligent contextual simulation fallback if image or API key unavailable
         filename = getattr(image_file, 'name', '').lower() if image_file else ''
-        if 'starbucks' in filename or 'coffee' in filename:
+        today_str = str(date.today())
+        if 'starbucks' in filename or 'coffee' in filename or 'cafe' in filename:
             return {
                 'merchant': 'Starbucks Coffee',
-                'amount': 345.00,
-                'date': str(date.today()),
+                'amount': 380.00,
+                'date': today_str,
                 'category': 'Food & Drinks',
-                'notes': 'Latte, Cold Brew & pastry with team',
-                'tax': 27.50
+                'notes': 'Cappuccino & Blueberry Muffin',
+                'tax': 28.50
             }
-        elif 'cinema' in filename or 'movie' in filename or 'amc' in filename:
+        elif 'cinema' in filename or 'movie' in filename or 'pvr' in filename or 'inox' in filename:
             return {
                 'merchant': 'PVR Cinemas',
-                'amount': 1200.00,
-                'date': str(date.today()),
+                'amount': 850.00,
+                'date': today_str,
                 'category': 'Entertainment',
-                'notes': '4 IMAX Tickets & large combo',
-                'tax': 95.00
+                'notes': '2 Movie Tickets & Popcorn Combo',
+                'tax': 65.00
+            }
+        elif 'grocery' in filename or 'fresh' in filename or 'mart' in filename or 'dmart' in filename:
+            return {
+                'merchant': 'DMart Supermarket',
+                'amount': 1420.00,
+                'date': today_str,
+                'category': 'Groceries',
+                'notes': 'Weekly household groceries & pantry supplies',
+                'tax': 82.00
+            }
+        elif 'uber' in filename or 'ola' in filename or 'cab' in filename or 'taxi' in filename:
+            return {
+                'merchant': 'Uber India',
+                'amount': 320.00,
+                'date': today_str,
+                'category': 'Transportation',
+                'notes': 'City cab ride',
+                'tax': 16.00
+            }
+        elif 'bill' in filename or 'electricity' in filename or 'wifi' in filename:
+            return {
+                'merchant': 'Airtel Broadband & Utilities',
+                'amount': 1179.00,
+                'date': today_str,
+                'category': 'Bills & Utilities',
+                'notes': 'Monthly high-speed fiber internet bill',
+                'tax': 180.00
             }
         else:
             return {
-                'merchant': 'Target Retail',
-                'amount': 852.50,
-                'date': '2025-04-15',
+                'merchant': 'Retail Store Invoice',
+                'amount': 750.00,
+                'date': today_str,
                 'category': 'Shopping',
-                'notes': 'Home office organizers and cables',
-                'tax': 68.00
+                'notes': 'Stationery, office essentials & accessories',
+                'tax': 45.00
             }
 
 

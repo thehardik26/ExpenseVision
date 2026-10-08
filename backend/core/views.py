@@ -356,14 +356,65 @@ ai_service = GeminiAIService()
 class ReceiptScanView(APIView):
     """
     Accepts an uploaded receipt image and returns extracted fields.
+    If 'auto_save' is requested, also immediately creates and saves the Transaction in the user's ledger!
     """
     def post(self, request):
         image_file = request.FILES.get("image")
         if not image_file:
-            data = ai_service.scan_receipt(None)
-            return Response(data)
-        extracted_data = ai_service.scan_receipt(image_file)
-        return Response(extracted_data)
+            extracted_data = ai_service.scan_receipt(None)
+        else:
+            extracted_data = ai_service.scan_receipt(image_file)
+
+        auto_save_param = request.data.get("auto_save")
+        if auto_save_param is None:
+            auto_save_param = request.query_params.get("auto_save")
+        
+        auto_save = False
+        if isinstance(auto_save_param, bool):
+            auto_save = auto_save_param
+        elif isinstance(auto_save_param, str):
+            auto_save = auto_save_param.lower() in ("true", "1", "yes")
+
+        saved_tx = None
+        if auto_save and extracted_data:
+            user = request.user if (request.user and request.user.is_authenticated) else None
+            if not user:
+                user = User.objects.filter(is_superuser=True).first()
+
+            category_name = extracted_data.get("category", "Shopping")
+            cat = get_or_create_canonical_category(category_name)
+            try:
+                amount_val = Decimal(str(extracted_data.get("amount", 0.0)))
+            except Exception:
+                amount_val = Decimal("0.00")
+
+            date_val = extracted_data.get("date") or str(date.today())
+            merchant_val = extracted_data.get("merchant", "Receipt Purchase")
+            notes_val = extracted_data.get("notes", "")
+
+            try:
+                if image_file:
+                    image_file.seek(0)
+                tx = Transaction.objects.create(
+                    user=user,
+                    transaction_type="Expense",
+                    category=cat,
+                    amount=amount_val,
+                    date=date_val,
+                    merchant=merchant_val,
+                    notes=notes_val,
+                    ai_scanned=True,
+                    receipt_image=image_file if image_file else None
+                )
+                saved_tx = TransactionSerializer(tx).data
+            except Exception as e:
+                print(f"[ReceiptScanView auto_save error]: {e}")
+
+        response_data = dict(extracted_data)
+        if saved_tx:
+            response_data["transaction"] = saved_tx
+            response_data["saved"] = True
+        return Response(response_data)
 
 
 class AIChatView(APIView):

@@ -30,6 +30,8 @@
 - **🔒 Multi-User Private Ledgers**: Complete user isolation with Django authentication, case-insensitive logins, and secure database sandboxing.
 - **📅 Real-Time Calendar Date Sync**: Dynamic dates anchored to current calendar day, month, and year across all rolling analytics.
 
+> 📖 **Comprehensive Documentation**: For a complete deep-dive into the architecture, OCR pipeline, Ollama chat system, database schemas, and workflows, read the [System Architecture & Working Guide](EXPENSEVISION_WORKING_GUIDE.md).
+
 ---
 
 ## 📸 Interface Preview

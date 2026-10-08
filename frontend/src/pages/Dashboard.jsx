@@ -30,6 +30,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+    const handleTxUpdate = () => fetchData();
+    window.addEventListener('transactionAdded', handleTxUpdate);
+    return () => window.removeEventListener('transactionAdded', handleTxUpdate);
   }, []);
 
   const handleQuickAddSalary = async (amt = '50000') => {

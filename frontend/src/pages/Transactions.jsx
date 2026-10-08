@@ -52,6 +52,9 @@ export default function Transactions() {
 
   useEffect(() => {
     fetchTransactions();
+    const handleTxUpdate = () => fetchTransactions();
+    window.addEventListener('transactionAdded', handleTxUpdate);
+    return () => window.removeEventListener('transactionAdded', handleTxUpdate);
   }, []);
 
   // Delete transaction handler
