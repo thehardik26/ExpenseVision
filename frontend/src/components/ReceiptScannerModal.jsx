@@ -14,6 +14,27 @@ const CATEGORIES = [
   'Other'
 ];
 
+const formatDateToISO = (dateStr) => {
+  if (!dateStr) return new Date().toISOString().split('T')[0];
+  const str = String(dateStr).trim();
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // Match DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const month = dmyMatch[2].padStart(2, '0');
+    const year = dmyMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+  // Fallback to JS Date parsing
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return new Date().toISOString().split('T')[0];
+};
+
 export default function ReceiptScannerModal({ isOpen, onClose }) {
   const [step, setStep] = useState('upload'); // 'upload' | 'scanning' | 'review' | 'success'
   const [file, setFile] = useState(null);
@@ -121,7 +142,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       setMerchant(parsedMerchant || (sampleName ? sampleName : 'Store / Vendor'));
       setAmount(parsedAmount);
       setCategory(CATEGORIES.includes(data.category) ? data.category : 'Shopping');
-      setDate(data.date || new Date().toISOString().split('T')[0]);
+      setDate(formatDateToISO(data.date));
       setNotes(data.notes || '');
       setTax(data.tax && Number(data.tax) > 0 ? String(data.tax) : '');
       setIsAiVerified(Boolean(data.is_ai_extracted));
@@ -171,11 +192,18 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       formData.append('transaction_type', 'Expense');
       formData.append('category_name', category);
       formData.append('amount', parseFloat(amount));
-      formData.append('date', date || new Date().toISOString().split('T')[0]);
+      formData.append('date', formatDateToISO(date));
       formData.append('merchant', merchant);
-      formData.append('notes', notes);
+
+      // Append Tax to notes so it is captured in transaction history
+      let fullNotes = notes || '';
+      if (tax && !fullNotes.includes('Tax') && !fullNotes.includes('GST')) {
+        fullNotes = fullNotes ? `${fullNotes} (Tax/GST: ₹${tax})` : `Tax/GST: ₹${tax}`;
+      }
+      formData.append('notes', fullNotes);
       formData.append('ai_scanned', 'true');
-      if (file) {
+
+      if (file && file instanceof File && file.size > 0) {
         formData.append('receipt_image', file);
       }
 
@@ -187,7 +215,21 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       window.dispatchEvent(new CustomEvent('transactionAdded', { detail: res.data }));
     } catch (err) {
       console.error('Failed to save scanned transaction:', err);
-      setError('Could not record transaction to database. Please verify your connection.');
+      let errorMsg = 'Could not record transaction to database.';
+      if (err.response?.data) {
+        const d = err.response.data;
+        if (typeof d === 'string') {
+          errorMsg = d;
+        } else if (d.detail) {
+          errorMsg = d.detail;
+        } else if (typeof d === 'object') {
+          const fieldErrors = Object.entries(d)
+            .map(([field, errs]) => `${field}: ${Array.isArray(errs) ? errs.join(', ') : errs}`)
+            .join(' | ');
+          if (fieldErrors) errorMsg = fieldErrors;
+        }
+      }
+      setError(errorMsg);
     } finally {
       setSaving(false);
     }

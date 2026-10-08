@@ -1,10 +1,41 @@
+import re
+from datetime import datetime, date
 from rest_framework import serializers
 from .models import Category, Transaction, Budget, AIChatHistory
 from django.db.models import Sum
 from decimal import Decimal
 
-
 from .utils import get_or_create_canonical_category
+
+def normalize_date_string(val):
+    """
+    Converts various human date formats (DD-MM-YYYY, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY, DD-Mon-YYYY)
+    into strict ISO 'YYYY-MM-DD' required by Django DateField.
+    """
+    if not val:
+        return str(date.today())
+    if isinstance(val, (date, datetime)):
+        return val.strftime("%Y-%m-%d")
+
+    val_str = str(val).strip()
+    formats = [
+        "%Y-%m-%d",
+        "%d-%m-%Y",
+        "%d/%m/%Y",
+        "%m/%d/%Y",
+        "%Y/%m/%d",
+        "%d.%m.%Y",
+        "%d-%b-%Y",
+        "%d %b %Y",
+        "%b %d, %Y",
+        "%B %d, %Y",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(val_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return val_str
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -29,10 +60,30 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         data = data.copy() if hasattr(data, "copy") else dict(data)
+        
+        # 1. Normalize Category
         cat_input = data.get("category_name") or data.get("category")
         if cat_input and not str(cat_input).isdigit():
             cat = get_or_create_canonical_category(str(cat_input).strip())
             data["category"] = cat.id
+
+        # 2. Normalize Date (DD-MM-YYYY -> YYYY-MM-DD)
+        date_input = data.get("date")
+        if date_input:
+            data["date"] = normalize_date_string(date_input)
+
+        # 3. Clean Amount string (strip currency symbols or commas)
+        amt_input = data.get("amount")
+        if amt_input is not None:
+            clean_amt = re.sub(r"[^\d.]", "", str(amt_input))
+            if clean_amt:
+                data["amount"] = clean_amt
+
+        # 4. Safely discard empty or invalid receipt_image keys
+        img_val = data.get("receipt_image")
+        if img_val in ("", "null", "undefined", None):
+            data.pop("receipt_image", None)
+
         return super().to_internal_value(data)
 
 

@@ -100,6 +100,24 @@ class GoogleGeminiService:
             except Exception as e:
                 print(f"[GoogleGeminiService] Client init error: {e}")
 
+    @staticmethod
+    def _normalize_date(val, fallback=None):
+        if not val:
+            return fallback or str(date.today())
+        val_str = str(val).strip()
+        from datetime import datetime
+        formats = [
+            "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%m/%d/%Y",
+            "%Y/%m/%d", "%d.%m.%Y", "%d-%b-%Y", "%d %b %Y",
+            "%b %d, %Y", "%B %d, %Y"
+        ]
+        for fmt in formats:
+            try:
+                return datetime.strptime(val_str, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        return fallback or str(date.today())
+
     def scan_receipt(self, image_file):
         """
         Extracts merchant, amount, date, category, tax, and notes from a receipt or bill image.
@@ -185,8 +203,8 @@ class GoogleGeminiService:
                                 except (ValueError, TypeError):
                                     parsed['tax'] = 0.0
 
-                                if not parsed.get('date'):
-                                    parsed['date'] = today_iso
+                                raw_date = parsed.get('date')
+                                parsed['date'] = self._normalize_date(raw_date, today_iso)
                                 if not parsed.get('merchant'):
                                     parsed['merchant'] = 'Scanned Vendor'
                                 if not parsed.get('category'):
