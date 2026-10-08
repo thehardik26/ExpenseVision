@@ -86,9 +86,6 @@ class BudgetViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="set-total")
     def set_total(self, request):
-        """
-        Sets an overall monthly budget and distributes it across categories.
-        """
         total_str = request.data.get("total_budget")
         if not total_str:
             return Response({"error": "total_budget is required"}, status=status.HTTP_400_BAD_REQUEST)
@@ -138,10 +135,6 @@ class BudgetViewSet(viewsets.ModelViewSet):
 
 
 class DashboardSummaryView(APIView):
-    """
-    Returns user-isolated aggregated metrics for the 4 KPI cards, Expense Analytics bar chart,
-    Budget overview progress bars, and recent transactions based on real-time current date.
-    """
     def get(self, request):
         user = request.user if (request.user and request.user.is_authenticated) else None
         if not user:
@@ -172,7 +165,6 @@ class DashboardSummaryView(APIView):
         total_balance = all_income - all_expense
         savings_total = income_total - expense_total
 
-        # Dynamic rolling 6-month metrics ending with current real-time month
         month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         chart_labels = []
         expense_series = []
@@ -201,7 +193,6 @@ class DashboardSummaryView(APIView):
             expense_series.append(float(m_exp))
             income_series.append(float(m_inc))
 
-        # Dynamic weekly breakdown for the current month
         week_labels = ["Week 1 (1-7)", "Week 2 (8-14)", "Week 3 (15-21)", "Week 4+ (22+)"]
         week_expenses = [0.0, 0.0, 0.0, 0.0]
         week_income = [0.0, 0.0, 0.0, 0.0]
@@ -232,7 +223,6 @@ class DashboardSummaryView(APIView):
 
         ensure_user_default_budgets(user, month=current_month, year=current_year)
 
-        # Auto-create budget for any category where user has recorded expenses this month
         active_cat_ids = user_txs.filter(
             transaction_type="Expense",
             date__year=current_year,
@@ -254,7 +244,6 @@ class DashboardSummaryView(APIView):
         if not budgets.exists():
             budgets = Budget.objects.filter(user=user)
 
-        # Sort budgets so categories with active spending in the current month appear first!
         def get_active_spent(b):
             cat_names = [b.category.name]
             if b.category.name == "Food & Drinks":
@@ -296,9 +285,6 @@ class DashboardSummaryView(APIView):
 
 
 class ReportsAnalyticsView(APIView):
-    """
-    Returns user-isolated data for Donut Chart, Trend lines, and rolling 6-month summaries.
-    """
     def get(self, request):
         user = request.user if (request.user and request.user.is_authenticated) else None
         if not user:
@@ -325,7 +311,6 @@ class ReportsAnalyticsView(APIView):
                     "color": cat.color
                 })
 
-        # Sort category shares from highest spending to lowest
         category_shares.sort(key=lambda x: x["amount"], reverse=True)
 
         month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -360,7 +345,6 @@ class ReportsAnalyticsView(APIView):
         total_expense_6m = sum(trend_expenses)
         net_savings_6m = total_income_6m - total_expense_6m
 
-        # Dynamic weekly breakdown for the current month
         week_labels = ["Week 1 (1-7)", "Week 2 (8-14)", "Week 3 (15-21)", "Week 4+ (22+)"]
         week_expenses = [0.0, 0.0, 0.0, 0.0]
         week_income = [0.0, 0.0, 0.0, 0.0]
@@ -404,10 +388,6 @@ class ReportsAnalyticsView(APIView):
 ai_service = GeminiAIService()
 
 class ReceiptScanView(APIView):
-    """
-    Accepts an uploaded receipt image (file or base64) and returns extracted fields via Gemini Vision OCR.
-    If 'auto_save' is requested and a valid amount was extracted, immediately records the Transaction to the user's ledger.
-    """
     def post(self, request):
         image_file = (
             request.FILES.get("image")
@@ -487,9 +467,6 @@ class ReceiptScanView(APIView):
 
 
 class AIChatView(APIView):
-    """
-    Financial Copilot conversational chat endpoint with live DB context isolated to user.
-    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -503,10 +480,6 @@ class AIChatView(APIView):
 
 
 class AIChatHistoryView(APIView):
-    """
-    Retrieves and manages conversational chat history.
-    User-isolated: When authenticated, returns messages linked to the user account.
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -533,11 +506,7 @@ class AIChatHistoryView(APIView):
         return Response({"message": "Chat history cleared successfully", "deleted": deleted_count})
 
 
-
 class NaturalLanguageParseView(APIView):
-    """
-    Parses a casual sentence into a structured transaction.
-    """
     def post(self, request):
         text = request.data.get("text", "").strip()
         if not text:

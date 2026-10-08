@@ -95,7 +95,6 @@ export default function ExpenseChart({ analytics = {} }) {
         </div>
 
         <div className="flex items-center gap-4">
-          {/* Custom Styled Visual Legend */}
           <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
             <span className="flex items-center gap-1.5">
               <span className="w-3 h-3 rounded-md bg-emerald-500 inline-block" />

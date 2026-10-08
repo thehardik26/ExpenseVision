@@ -37,7 +37,6 @@ export default function Transactions() {
   const [selectedType, setSelectedType] = useState('ALL');
   const [loading, setLoading] = useState(true);
 
-  // Fetch transactions from backend
   const fetchTransactions = () => {
     setLoading(true);
     axios.get('/api/transactions/')
@@ -57,19 +56,16 @@ export default function Transactions() {
     return () => window.removeEventListener('transactionAdded', handleTxUpdate);
   }, []);
 
-  // Delete transaction handler
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this transaction?")) return;
     try {
       await axios.delete(`/api/transactions/${id}/`);
       setTransactions(prev => prev.filter(t => t.id !== id));
     } catch {
-      // Optimistic delete
       setTransactions(prev => prev.filter(t => t.id !== id));
     }
   };
 
-  // Filter transactions based on Search, Category, and Type
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
       const merchant = (tx.merchant || '').toLowerCase();
@@ -85,7 +81,6 @@ export default function Transactions() {
     });
   }, [transactions, search, selectedCategory, selectedType]);
 
-  // Export CSV function (as in master plan)
   const exportCSV = () => {
     if (filteredTransactions.length === 0) {
       alert("No transactions to export.");
@@ -109,7 +104,6 @@ export default function Transactions() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Actions */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-900">Transactions Ledger</h1>
@@ -137,9 +131,7 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* 2. Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row gap-3 items-center">
-        {/* Search */}
         <div className="relative flex-1 w-full">
           <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
           <input
@@ -151,7 +143,6 @@ export default function Transactions() {
           />
         </div>
 
-        {/* Category Filter */}
         <div className="w-full sm:w-48">
           <select
             value={selectedCategory}
@@ -170,7 +161,6 @@ export default function Transactions() {
           </select>
         </div>
 
-        {/* Type Filter */}
         <div className="w-full sm:w-40">
           <select
             value={selectedType}
@@ -184,7 +174,6 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* 3. Full Ledger Table */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-slate-400 font-semibold animate-pulse">Loading Ledger...</div>

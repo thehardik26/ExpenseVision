@@ -1,4 +1,4 @@
-﻿import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   LayoutDashboard, PieChart, CreditCard, Sliders, 
@@ -27,7 +27,6 @@ export default function Sidebar({ user, onOpenScanner, onToggleCopilot }) {
 
   return (
     <aside className="fixed top-0 bottom-0 left-0 w-64 bg-white border-r border-slate-200/80 p-5 flex flex-col z-40">
-      {/* Brand Header */}
       <div className="flex items-center gap-3 px-3 py-4 mb-4">
         <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-500 text-white flex items-center justify-center font-bold text-base shadow-sm shadow-violet-500/20 ring-1 ring-white/10">
           E
@@ -40,7 +39,6 @@ export default function Sidebar({ user, onOpenScanner, onToggleCopilot }) {
         </div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
         <NavLink to="/dashboard" className={navClass}>
           <LayoutDashboard size={18} />
@@ -83,11 +81,10 @@ export default function Sidebar({ user, onOpenScanner, onToggleCopilot }) {
           </span>
         </button>
 
-        {/* Django Admin Quick Link */}
         {user?.is_superuser && (
           <div className="pt-2">
             <a
-              href="http://127.0.0.1:8000/admin/"
+              href="/admin/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-semibold text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200/60 transition group cursor-pointer"
@@ -103,7 +100,6 @@ export default function Sidebar({ user, onOpenScanner, onToggleCopilot }) {
         )}
       </nav>
 
-      {/* User Info & Logout Footer */}
       <div className="border-t border-slate-200 pt-4 space-y-3">
         <div className="flex items-center gap-3 px-2 py-1.5 rounded-xl bg-slate-50 border border-slate-100">
           <div className="w-8 h-8 rounded-lg bg-violet-600 text-white font-bold flex items-center justify-center text-xs shadow-sm">

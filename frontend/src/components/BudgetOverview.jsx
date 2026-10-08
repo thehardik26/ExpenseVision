@@ -14,7 +14,6 @@ export default function BudgetOverview({ budgets = [] }) {
   const totalLimit = budgets.reduce((acc, b) => acc + parseFloat(b.monthly_limit || 0), 0);
   const totalSpent = budgets.reduce((acc, b) => acc + parseFloat(b.spent || 0), 0);
 
-  // Prioritize categories with active spending so newly recorded expenses always show at the top
   const sortedBudgets = [...budgets].sort((a, b) => {
     const aSpent = parseFloat(a.spent || 0);
     const bSpent = parseFloat(b.spent || 0);

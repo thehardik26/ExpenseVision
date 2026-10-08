@@ -94,7 +94,6 @@ export default function TrendLineChart({ trendLine }) {
           <span className="text-xs font-semibold text-slate-400">Monthly Velocity</span>
         </div>
 
-        {/* Legend */}
         <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />

@@ -62,8 +62,6 @@ export default function Reports() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      
-      {/* 1. Rolling 6-Month & Weekly Expense Bar Analytics */}
       <div className="relative">
         {refreshing && (
           <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-2.5 py-1 bg-white/80 backdrop-blur-xs rounded-full border border-slate-200 text-[10px] font-bold text-violet-600 shadow-xs animate-pulse">
@@ -74,16 +72,12 @@ export default function Reports() {
         <ExpenseChart analytics={data?.expense_analytics || { labels: data?.trend_line?.labels, expenses: data?.trend_line?.expenses, income: data?.trend_line?.income }} />
       </div>
 
-      {/* 2. Donut Breakdown & Trend Line Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CategoryDonutChart categoryBreakdown={data?.category_breakdown || []} />
         <TrendLineChart trendLine={data?.trend_line} />
       </div>
 
-      {/* 3. Financial Summary Bar (Grounded in Real User Transactions) */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Total Income */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -101,7 +95,6 @@ export default function Reports() {
           </span>
         </div>
 
-        {/* Total Expenses */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -119,7 +112,6 @@ export default function Reports() {
           </span>
         </div>
 
-        {/* Net Savings */}
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -141,9 +133,7 @@ export default function Reports() {
             </span>
           </div>
         </div>
-
       </div>
-
     </div>
   );
 }

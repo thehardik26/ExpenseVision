@@ -14,7 +14,6 @@ const TransactionForm = forwardRef(function TransactionForm({ onTransactionAdded
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Expose helper to parent (e.g. quick-fill salary)
   useImperativeHandle(ref, () => ({
     prefillIncome: (defaultAmount = '', defaultSource = 'Monthly Salary') => {
       setTxType('Income');
@@ -137,7 +136,6 @@ const TransactionForm = forwardRef(function TransactionForm({ onTransactionAdded
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Prominent Type Switcher */}
         <div>
           <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Transaction Type</label>
           <div className="grid grid-cols-2 gap-3 max-w-md">
@@ -247,7 +245,6 @@ const TransactionForm = forwardRef(function TransactionForm({ onTransactionAdded
           </div>
         </div>
 
-        {/* Quick Suggestion Chips */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <span className="text-[11px] text-slate-400 font-semibold">Quick fill:</span>
           {txType === 'Income' ? (

@@ -25,25 +25,14 @@ except ImportError:
 
 
 class OllamaAIService:
-    """
-    Ollama Open Models Service.
-    Supports:
-    - Ollama Cloud (https://ollama.com/api/chat) via OLLAMA_API_KEY
-    - Local Ollama server (http://localhost:11434/api/chat)
-    Default recommended cloud model: gemma4:31b (or gemma4:cloud)
-    """
     def __init__(self):
         self.api_key = getattr(settings, 'OLLAMA_API_KEY', os.environ.get('OLLAMA_API_KEY', '')).strip()
         self.host = getattr(settings, 'OLLAMA_HOST', os.environ.get('OLLAMA_HOST', 'https://ollama.com')).rstrip('/')
         self.model = getattr(settings, 'OLLAMA_MODEL', os.environ.get('OLLAMA_MODEL', 'gemma4:31b')).strip()
 
     def chat_completion(self, messages, timeout=25):
-        """
-        Sends chat completion request to Ollama Cloud or local Ollama server.
-        """
         headers = {"Content-Type": "application/json"}
         
-        # 1. If Ollama API key is set, call Ollama Cloud
         if self.api_key:
             endpoint = f"{self.host}/api/chat"
             headers["Authorization"] = f"Bearer {self.api_key}"
@@ -64,10 +53,8 @@ class OllamaAIService:
             except Exception as e:
                 print(f"[Ollama Cloud Exception]: {e}")
 
-        # 2. Try Local Ollama server (http://localhost:11434/api/chat)
         try:
             local_endpoint = "http://localhost:11434/api/chat"
-            # Strip :cloud suffix if targeting local instance
             local_model = self.model.replace(":cloud", "")
             payload = {
                 "model": local_model,
@@ -81,16 +68,12 @@ class OllamaAIService:
                 if content:
                     return content
         except Exception:
-            # Local Ollama either not running or model not pulled
             pass
 
         return None
 
 
 class GoogleGeminiService:
-    """
-    Google Gemini AI Service (Vision OCR & Fallback).
-    """
     def __init__(self):
         self.api_key = getattr(settings, 'GEMINI_API_KEY', os.environ.get('GEMINI_API_KEY', ''))
         self.client = None
@@ -119,16 +102,11 @@ class GoogleGeminiService:
         return fallback or str(date.today())
 
     def scan_receipt(self, image_file):
-        """
-        Extracts merchant, amount, date, category, tax, and notes from a receipt or bill image.
-        Uses multimodal Gemini Vision models with intelligent image orientation and resolution optimization.
-        """
         if self.client and image_file:
             try:
                 raw_bytes = image_file.read()
-                image_file.seek(0)  # Rewind file pointer for subsequent processing/storage
+                image_file.seek(0)
                 
-                # Image normalization via Pillow: auto-orient, RGB conversion, and resolution bounding
                 image_bytes = raw_bytes
                 mime_type = getattr(image_file, 'content_type', 'image/jpeg')
                 if not mime_type or mime_type == 'application/octet-stream':
@@ -140,7 +118,6 @@ class GoogleGeminiService:
                             img = ImageOps.exif_transpose(img)
                             if img.mode in ('RGBA', 'P'):
                                 img = img.convert('RGB')
-                            # Constrain max dimension to 1600px for high OCR accuracy + rapid upload
                             if max(img.size) > 1600:
                                 img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
                             buf = io.BytesIO()
@@ -171,7 +148,6 @@ class GoogleGeminiService:
                 5. Return ONLY valid JSON.
                 """
 
-                # Active high-performance vision models
                 model_candidates = [
                     'gemini-3.5-flash',
                     'gemini-3.5-flash-lite',
@@ -188,7 +164,6 @@ class GoogleGeminiService:
                             ]
                         )
                         raw_text = response.text.strip()
-                        # Extract JSON object using regex
                         json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
                         if json_match:
                             parsed = json.loads(json_match.group(0))
@@ -223,7 +198,6 @@ class GoogleGeminiService:
                     except Exception:
                         pass
 
-        # Intelligent contextual simulation fallback if image or API key unavailable
         filename = getattr(image_file, 'name', '').lower() if image_file else ''
         today_str = str(date.today())
         if 'starbucks' in filename or 'coffee' in filename or 'cafe' in filename:
@@ -283,12 +257,6 @@ class GoogleGeminiService:
 
 
 class UnifiedAIService:
-    """
-    Unified AI Service coordinating:
-    1. Ollama (Cloud open models / Local Ollama)
-    2. Google Gemini (Multimodal Vision OCR & fallback)
-    3. Mathematical grounded financial simulation engine
-    """
     def __init__(self):
         self.ollama = OllamaAIService()
         self.gemini = GoogleGeminiService()
@@ -297,15 +265,9 @@ class UnifiedAIService:
         return self.gemini.scan_receipt(image_file)
 
     def chat_advisor(self, user_message, session_id='default', user=None):
-        """
-        User-isolated Financial Copilot Chatbot.
-        Saves user and assistant turns to AIChatHistory tied to the user account
-        so chat history is permanently preserved across sign-outs.
-        """
         if not user or not user.is_authenticated:
             user = None
 
-        # Build live database snapshot for the user
         user_txs = Transaction.objects.filter(user=user)
         total_income = user_txs.filter(transaction_type='Income').aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
         total_expense = user_txs.filter(transaction_type='Expense').aggregate(t=Sum('amount'))['t'] or Decimal('0.00')
@@ -339,7 +301,6 @@ Recent Transactions:
 
 Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹). Keep answers clear and helpful."""
 
-        # Fetch recent chat history turns for conversational context
         if user:
             recent_history = list(AIChatHistory.objects.filter(user=user).order_by("-created_at")[:6])
         else:
@@ -352,7 +313,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
             messages_payload.append({"role": role_tag, "content": item.message})
         messages_payload.append({"role": "user", "content": user_message})
 
-        # Save user message to persistent history immediately
         AIChatHistory.objects.create(
             user=user,
             session_id=session_id,
@@ -360,7 +320,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
             message=user_message
         )
 
-        # 1. Try Ollama (Cloud or Local open model)
         ollama_reply = self.ollama.chat_completion(messages_payload)
         if ollama_reply:
             AIChatHistory.objects.create(
@@ -371,7 +330,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
             )
             return ollama_reply
 
-        # 2. Try Google Gemini API
         if self.gemini.client:
             for model_name in ['gemini-3.5-flash-lite', 'gemini-flash-latest']:
                 try:
@@ -391,7 +349,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
                 except Exception as e:
                     print(f"[Gemini Chat Error with {model_name}]: {e}")
 
-        # 3. Dynamic Calculation Fallback Engine if remote APIs are offline/unconfigured
         msg_lower = user_message.lower()
         if "budget" in msg_lower or "over" in msg_lower:
             reply = f"📊 **Budget Health Analysis for {username}:**\n\nYour active monthly budgets are tracked in Indian Rupees (₹). Your current balance is **₹{balance:,.2f}**.\n\n{budget_summary}"
@@ -426,7 +383,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
         }}
         Return ONLY valid JSON.
         """
-        # Try Ollama first
         ollama_res = self.ollama.chat_completion([{"role": "user", "content": prompt}])
         if ollama_res:
             try:
@@ -435,7 +391,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
             except Exception:
                 pass
 
-        # Try Gemini
         if self.gemini.client:
             try:
                 response = self.gemini.client.models.generate_content(
@@ -447,7 +402,6 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
             except Exception as e:
                 print(f"[Gemini NL Parse Error]: {e}")
 
-        # Intelligent simulation fallback
         text_lower = text.lower()
         cat = "Shopping"
         merchant = "Retailer"
@@ -481,5 +435,4 @@ Provide concise, friendly, math-grounded advice strictly in Indian Rupees (₹).
 
 
 ai_service = UnifiedAIService()
-# Backward compatibility alias
 GeminiAIService = UnifiedAIService

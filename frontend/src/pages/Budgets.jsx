@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import { Plus, AlertCircle, CheckCircle2, Sliders, X, Sparkles, Edit2, Zap } from 'lucide-react';
 
@@ -16,15 +16,12 @@ export default function Budgets() {
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   
-  // Modal states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isTotalBudgetModalOpen, setIsTotalBudgetModalOpen] = useState(false);
 
-  // Total budget form state
   const [totalMonthlyBudgetInput, setTotalMonthlyBudgetInput] = useState('50000');
   const [submittingTotal, setSubmittingTotal] = useState(false);
 
-  // Category budget form state
   const [editingBudgetId, setEditingBudgetId] = useState(null);
   const [categoryName, setCategoryName] = useState('Groceries');
   const [monthlyLimit, setMonthlyLimit] = useState('');
@@ -46,13 +43,11 @@ export default function Budgets() {
     fetchBudgets();
   }, []);
 
-  // Filter budgets (ALL, Essential, Discretionary)
   const filteredBudgets = useMemo(() => {
     if (activeFilter === 'ALL') return budgets;
     return budgets.filter(b => b.category_type === activeFilter);
   }, [budgets, activeFilter]);
 
-  // Overall Totals
   const totals = useMemo(() => {
     return budgets.reduce((acc, b) => {
       acc.totalLimit += parseFloat(b.monthly_limit || 0);
@@ -62,7 +57,6 @@ export default function Budgets() {
     }, { totalLimit: 0, totalSpent: 0, totalRemaining: 0 });
   }, [budgets]);
 
-  // Handler for setting overall total monthly budget
   const handleSetTotalBudget = async (e) => {
     e.preventDefault();
     if (!totalMonthlyBudgetInput) return;
@@ -84,7 +78,6 @@ export default function Budgets() {
     }
   };
 
-  // Handler for creating or editing an individual category budget
   const handleSaveCategoryBudget = async (e) => {
     e.preventDefault();
     if (!monthlyLimit) return;
@@ -122,7 +115,6 @@ export default function Budgets() {
     setIsCategoryModalOpen(true);
   };
 
-  // Proportional breakdown preview for the total budget modal
   const targetTotal = parseFloat(totalMonthlyBudgetInput || 0);
   const previewAllocations = useMemo(() => [
     { name: 'Housing (25%)', amount: targetTotal * 0.25, type: 'Essential', color: 'bg-blue-500' },
@@ -136,7 +128,6 @@ export default function Budgets() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header & Actions */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -151,7 +142,6 @@ export default function Budgets() {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Main Action: Set Total Monthly Budget */}
           <button
             onClick={() => setIsTotalBudgetModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-violet-200 transition cursor-pointer"
@@ -160,7 +150,6 @@ export default function Budgets() {
             <span>Set Total Monthly Budget</span>
           </button>
 
-          {/* Secondary Action: Add Individual Category */}
           <button
             onClick={() => {
               setEditingBudgetId(null);
@@ -176,7 +165,6 @@ export default function Budgets() {
         </div>
       </div>
 
-      {/* 2. Top Financial Summary Bar (In Rupees) */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="space-y-1">
           <div className="flex items-center justify-between">
@@ -215,7 +203,6 @@ export default function Budgets() {
         </div>
       </div>
 
-      {/* 3. Filter Tabs */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 p-1 bg-slate-200/60 rounded-xl w-fit text-xs font-bold">
           {['ALL', 'Essential', 'Discretionary'].map(tab => (
@@ -237,7 +224,6 @@ export default function Budgets() {
         </span>
       </div>
 
-      {/* 4. Category Budget Cards Grid */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
         {loading ? (
           <div className="p-8 text-center text-slate-400 font-semibold animate-pulse">Loading budgets...</div>
@@ -282,7 +268,6 @@ export default function Budgets() {
                     </div>
                   </div>
 
-                  {/* Progress Bar */}
                   <div className="h-2.5 rounded-full bg-slate-200/70 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
@@ -292,7 +277,6 @@ export default function Budgets() {
                     />
                   </div>
 
-                  {/* Bottom Stats */}
                   <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
                     <span>{pct}% spent</span>
                     <span className={isOver ? 'text-rose-500 font-bold' : 'text-slate-600'}>
@@ -306,7 +290,6 @@ export default function Budgets() {
         )}
       </div>
 
-      {/* 5. Set Overall Total Monthly Budget Modal */}
       {isTotalBudgetModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-slate-100 space-y-5 animate-scaleUp">
@@ -340,7 +323,6 @@ export default function Budgets() {
                 />
               </div>
 
-              {/* Quick Select Presets */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-slate-400 font-bold uppercase">Presets:</span>
                 {['25000', '50000', '75000', '100000'].map(val => (
@@ -359,7 +341,6 @@ export default function Budgets() {
                 ))}
               </div>
 
-              {/* Live Preview Allocations */}
               <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-100 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                   <span>Category Distribution Preview</span>
@@ -400,7 +381,6 @@ export default function Budgets() {
         </div>
       )}
 
-      {/* 6. Add / Edit Individual Category Budget Modal */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl border border-slate-100 space-y-4">
@@ -496,4 +476,3 @@ export default function Budgets() {
     </div>
   );
 }
-

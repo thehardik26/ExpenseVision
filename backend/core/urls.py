@@ -7,7 +7,7 @@ from .views import (
 )
 
 from .auth_views import (
-    GoogleLoginView, AppleLoginView, LoginView, RegisterView, LogoutView, CurrentUserView,
+    LoginView, RegisterView, LogoutView, CurrentUserView,
     PasswordResetRequestView, PasswordResetConfirmView
 )
 
@@ -24,8 +24,6 @@ urlpatterns = [
     path("ai/chat/", AIChatView.as_view(), name="ai-chat"),
     path("ai/chat/history/", AIChatHistoryView.as_view(), name="ai-chat-history"),
     path("ai/parse-transaction/", NaturalLanguageParseView.as_view(), name="ai-parse-transaction"),
-    path("auth/google/", GoogleLoginView.as_view(), name="auth-google"),
-    path("auth/apple/", AppleLoginView.as_view(), name="auth-apple"),
     path("auth/password-reset/", PasswordResetRequestView.as_view(), name="auth-password-reset"),
     path("auth/password-reset-confirm/", PasswordResetConfirmView.as_view(), name="auth-password-reset-confirm"),
     path("auth/login/", LoginView.as_view(), name="auth-login"),

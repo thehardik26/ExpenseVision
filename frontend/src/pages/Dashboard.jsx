@@ -68,7 +68,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Informative Guidance Banner if Income is 0 */}
       {hasZeroIncome && (
         <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 border border-emerald-200/80 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xs">
           <div className="flex items-start gap-3.5">
@@ -112,7 +111,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 4 KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <MetricCard 
           title="Total Balance" 
@@ -143,7 +141,6 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Analytics & Budget Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <ExpenseChart analytics={data.expense_analytics} />
@@ -151,10 +148,8 @@ export default function Dashboard() {
         <BudgetOverview budgets={data.budget_overview} />
       </div>
 
-      {/* Transaction Entry Form */}
       <TransactionForm ref={txFormRef} onTransactionAdded={fetchData} onOpenScanner={onOpenScanner} />
 
-      {/* Recent Transactions Table */}
       <RecentTransactions transactions={data.recent_transactions} />
     </div>
   );

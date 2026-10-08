@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, X, UploadCloud, CheckCircle2, Sparkles, RefreshCw, FileText, ArrowRight, Check, AlertCircle, Copy, Image as ImageIcon } from 'lucide-react';
+import { Camera, X, UploadCloud, CheckCircle2, Sparkles, RefreshCw, FileText, Check, AlertCircle, Image as ImageIcon } from 'lucide-react';
 
 const CATEGORIES = [
   'Food & Drinks',
@@ -17,9 +17,7 @@ const CATEGORIES = [
 const formatDateToISO = (dateStr) => {
   if (!dateStr) return new Date().toISOString().split('T')[0];
   const str = String(dateStr).trim();
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
-  // Match DD-MM-YYYY or DD/MM/YYYY
   const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
   if (dmyMatch) {
     const day = dmyMatch[1].padStart(2, '0');
@@ -27,7 +25,6 @@ const formatDateToISO = (dateStr) => {
     const year = dmyMatch[3];
     return `${year}-${month}-${day}`;
   }
-  // Fallback to JS Date parsing
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     return parsed.toISOString().split('T')[0];
@@ -36,7 +33,7 @@ const formatDateToISO = (dateStr) => {
 };
 
 export default function ReceiptScannerModal({ isOpen, onClose }) {
-  const [step, setStep] = useState('upload'); // 'upload' | 'scanning' | 'review' | 'success'
+  const [step, setStep] = useState('upload');
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,7 +43,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   const [autoSave, setAutoSave] = useState(false);
   const [isAiVerified, setIsAiVerified] = useState(false);
 
-  // Form fields for extracted bill
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('Shopping');
@@ -58,7 +54,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  // Clipboard paste listener (Ctrl+V)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -119,7 +114,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       setFile(selectedFile);
       setPreviewUrl(URL.createObjectURL(selectedFile));
     } else if (sampleName) {
-      // Create a virtual dummy file with sample name for intelligent simulation
       const blob = new Blob(["sample receipt image"], { type: "image/jpeg" });
       const virtualFile = new File([blob], `${sampleName.toLowerCase().replace(/\s+/g, '_')}_receipt.jpg`, { type: "image/jpeg" });
       formData.append('image', virtualFile);
@@ -195,7 +189,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       formData.append('date', formatDateToISO(date));
       formData.append('merchant', merchant);
 
-      // Append Tax to notes so it is captured in transaction history
       let fullNotes = notes || '';
       if (tax && !fullNotes.includes('Tax') && !fullNotes.includes('GST')) {
         fullNotes = fullNotes ? `${fullNotes} (Tax/GST: ₹${tax})` : `Tax/GST: ₹${tax}`;
@@ -211,7 +204,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       setSavedTx(res.data);
       setStep('success');
 
-      // Dispatch global event so Dashboard, Budgets, and Transactions update immediately
       window.dispatchEvent(new CustomEvent('transactionAdded', { detail: res.data }));
     } catch (err) {
       console.error('Failed to save scanned transaction:', err);
@@ -238,8 +230,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   return (
     <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-xs">
@@ -264,7 +254,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Modal Body */}
         <div className="p-6">
           {error && (
             <div className="mb-4 text-xs bg-rose-50 border border-rose-200 text-rose-700 px-3.5 py-2.5 rounded-xl flex items-start gap-2">
@@ -280,10 +269,8 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* STEP 1: UPLOAD SCREEN */}
           {step === 'upload' && (
             <div className="space-y-4">
-              {/* Primary Dropzone */}
               <label 
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -311,7 +298,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                 </div>
               </label>
 
-              {/* Action Buttons: Camera Snap + Browse */}
               <div className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
@@ -340,7 +326,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                 </button>
               </div>
 
-              {/* Realistic Preset Samples */}
               <div className="pt-2">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <Sparkles size={12} className="text-amber-500" />
@@ -376,7 +361,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Auto-Save Toggle */}
               <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                 <label className="text-xs text-slate-600 flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -391,7 +375,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* STEP 2: SCANNING IN PROGRESS */}
           {step === 'scanning' && (
             <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
               {previewUrl ? (
@@ -401,7 +384,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                     alt="Scanning Preview"
                     className="w-full h-full object-cover filter brightness-95"
                   />
-                  {/* Glowing Laser Scan Bar */}
                   <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-violet-500 to-transparent shadow-[0_0_12px_#8b5cf6] animate-bounce" />
                 </div>
               ) : (
@@ -427,7 +409,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* STEP 3: REVIEW & EDIT EXTRACTED DATA CARD */}
           {step === 'review' && (
             <form onSubmit={handleSaveToTransactions} className="space-y-4">
               <div className="bg-violet-50/70 border border-violet-200/80 rounded-2xl p-3.5 flex items-center gap-3">
@@ -458,7 +439,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Form Grid */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 sm:col-span-1">
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
@@ -554,7 +534,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex items-center gap-2.5 pt-2">
                 <button
                   type="button"
@@ -581,7 +560,6 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             </form>
           )}
 
-          {/* STEP 4: SUCCESS CONFIRMATION */}
           {step === 'success' && (
             <div className="py-6 text-center space-y-4">
               <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-xs animate-in zoom-in-75">

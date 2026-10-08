@@ -23,7 +23,6 @@ urlpatterns = [
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Catch-all route to serve React Single-Page Application on the same domain & port
 urlpatterns += [
     re_path(r'^(?!api/|admin/|static/|media/).*$', serve_spa),
 ]

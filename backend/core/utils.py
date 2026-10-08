@@ -59,9 +59,6 @@ CANONICAL_METADATA = {
 
 
 def get_or_create_canonical_category(name_or_alias, default_type=None):
-    """
-    Normalizes category names and aliases into unified canonical Category models.
-    """
     clean_name = str(name_or_alias).strip()
     canonical_name = CATEGORY_ALIASES.get(clean_name.lower(), clean_name)
     meta = CANONICAL_METADATA.get(canonical_name, {
@@ -81,9 +78,6 @@ def get_or_create_canonical_category(name_or_alias, default_type=None):
 
 
 def ensure_user_default_budgets(user, month=None, year=None):
-    """
-    Creates starter category budgets for a user for the target month/year if they don't have any budgets.
-    """
     if not user:
         return
 

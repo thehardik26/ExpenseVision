@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Sidebar from './Sidebar';
@@ -31,7 +31,6 @@ export default function Layout() {
       return;
     }
     
-    // Sync authenticated user with Django backend
     axios.get('/api/auth/me/')
       .then(res => {
         if (res.data?.is_authenticated && res.data.user) {

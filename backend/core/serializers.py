@@ -8,10 +8,6 @@ from decimal import Decimal
 from .utils import get_or_create_canonical_category
 
 def normalize_date_string(val):
-    """
-    Converts various human date formats (DD-MM-YYYY, DD/MM/YYYY, MM/DD/YYYY, DD.MM.YYYY, DD-Mon-YYYY)
-    into strict ISO 'YYYY-MM-DD' required by Django DateField.
-    """
     if not val:
         return str(date.today())
     if isinstance(val, (date, datetime)):
@@ -61,25 +57,21 @@ class TransactionSerializer(serializers.ModelSerializer):
     def to_internal_value(self, data):
         data = data.copy() if hasattr(data, "copy") else dict(data)
         
-        # 1. Normalize Category
         cat_input = data.get("category_name") or data.get("category")
         if cat_input and not str(cat_input).isdigit():
             cat = get_or_create_canonical_category(str(cat_input).strip())
             data["category"] = cat.id
 
-        # 2. Normalize Date (DD-MM-YYYY -> YYYY-MM-DD)
         date_input = data.get("date")
         if date_input:
             data["date"] = normalize_date_string(date_input)
 
-        # 3. Clean Amount string (strip currency symbols or commas)
         amt_input = data.get("amount")
         if amt_input is not None:
             clean_amt = re.sub(r"[^\d.]", "", str(amt_input))
             if clean_amt:
                 data["amount"] = clean_amt
 
-        # 4. Safely discard empty or invalid receipt_image keys
         img_val = data.get("receipt_image")
         if img_val in ("", "null", "undefined", None):
             data.pop("receipt_image", None)
@@ -154,4 +146,3 @@ class AIChatHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = AIChatHistory
         fields = ["id", "user", "session_id", "role", "message", "created_at"]
-

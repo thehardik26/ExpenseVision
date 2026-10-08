@@ -91,7 +91,6 @@ export default function AICopilotDrawer({ isOpen, onClose }) {
 
   return (
     <aside className="fixed top-0 right-0 h-full w-[430px] max-w-[95vw] bg-white shadow-2xl z-50 flex flex-col border-l border-slate-200">
-      {/* Header */}
       <div className="p-4 bg-gradient-to-r from-indigo-700 via-purple-700 to-violet-700 text-white flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center font-bold">
@@ -135,7 +134,6 @@ export default function AICopilotDrawer({ isOpen, onClose }) {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-slate-50/70">
         {fetchingHistory && messages.length === 0 ? (
           <div className="text-center py-10 text-xs text-slate-400 flex flex-col items-center gap-2">
@@ -166,7 +164,6 @@ export default function AICopilotDrawer({ isOpen, onClose }) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompt Chips */}
       <div className="px-3.5 py-2 bg-slate-100/80 border-t border-slate-200 flex gap-2 overflow-x-auto text-[11px]">
         <button
           onClick={() => sendMessage("Am I over budget this month?")}
@@ -188,7 +185,6 @@ export default function AICopilotDrawer({ isOpen, onClose }) {
         </button>
       </div>
 
-      {/* Input */}
       <div className="p-3.5 border-t border-slate-200 bg-white flex gap-2">
         <input
           type="text"

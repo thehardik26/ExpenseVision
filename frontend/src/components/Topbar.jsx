@@ -1,4 +1,4 @@
-﻿import { Bell, ShieldCheck, ExternalLink, Calendar } from 'lucide-react';
+import { Bell, ShieldCheck, ExternalLink, Calendar } from 'lucide-react';
 
 export default function Topbar({ user }) {
   const todayFormatted = new Date().toLocaleDateString('en-IN', {
@@ -21,7 +21,6 @@ export default function Topbar({ user }) {
       </div>
       
       <div className="flex items-center gap-3">
-        {/* Real-time Current Date Pill */}
         <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs font-bold text-slate-700 shadow-2xs">
           <Calendar size={14} className="text-violet-600" />
           <span>{todayFormatted}</span>
@@ -29,7 +28,7 @@ export default function Topbar({ user }) {
 
         {user?.is_superuser && (
           <a
-            href="http://127.0.0.1:8000/admin/"
+            href="/admin/"
             target="_blank"
             rel="noopener noreferrer"
             className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm"

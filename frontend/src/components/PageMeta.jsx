@@ -38,10 +38,8 @@ export default function PageMeta() {
       description: 'The requested page could not be found on ExpenseVision.',
     };
 
-    // 1. Update Document Title
     document.title = currentMeta.title;
 
-    // 2. Update Meta Description
     let metaDesc = document.querySelector('meta[name="description"]');
     if (!metaDesc) {
       metaDesc = document.createElement('meta');
@@ -50,7 +48,6 @@ export default function PageMeta() {
     }
     metaDesc.content = currentMeta.description;
 
-    // 3. Update Open Graph Title & Description
     let ogTitle = document.querySelector('meta[property="og:title"]');
     if (ogTitle) {
       ogTitle.content = currentMeta.title;
