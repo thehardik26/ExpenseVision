@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, X, KeyRound, CheckCircle2, AlertCircle } from 'lucide-react';
 import heroImg from '../assets/auth_hero.jpg';
 
 export default function Login() {
@@ -22,6 +22,17 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Forgot Password state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('hardikpamale.4@gmail.com');
+  const [forgotStep, setForgotStep] = useState(1);
+  const [forgotToken, setForgotToken] = useState('');
+  const [forgotUid, setForgotUid] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState('');
+  const [forgotErr, setForgotErr] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -94,6 +105,102 @@ export default function Login() {
     setIdentifier(demoUser);
     setPassword(demoPass);
     setIsRegister(false);
+  };
+
+  const handleRequestReset = async (e) => {
+    e.preventDefault();
+    setForgotErr('');
+    setForgotMsg('');
+    setForgotLoading(true);
+    try {
+      const res = await axios.post('/api/auth/password-reset/', { email: forgotEmail.trim() });
+      setForgotUid(res.data.uidb64 || '');
+      setForgotToken(res.data.token || '');
+      setForgotMsg(res.data.message || 'Reset token generated!');
+      setForgotStep(2);
+    } catch (err) {
+      setForgotErr(err.response?.data?.error || 'Could not find account. Please verify email.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleConfirmReset = async (e) => {
+    e.preventDefault();
+    setForgotErr('');
+    setForgotMsg('');
+    setForgotLoading(true);
+    try {
+      const res = await axios.post('/api/auth/password-reset-confirm/', {
+        uidb64: forgotUid,
+        token: forgotToken.trim(),
+        new_password: forgotNewPassword,
+        email: forgotEmail.trim()
+      });
+      setSuccess("Password updated! You can now sign in with your new password.");
+      setPassword(forgotNewPassword);
+      if (res.data?.user?.username) {
+        setIdentifier(res.data.user.username);
+      }
+      setShowForgotModal(false);
+      setForgotStep(1);
+    } catch (err) {
+      setForgotErr(err.response?.data?.error || 'Invalid or expired token.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt();
+      return;
+    }
+    const email = prompt("Enter Google email for Google Sign-In:", "hardikpamale.4@gmail.com");
+    if (!email) return;
+    setLoading(true);
+    try {
+      const res = await axios.post('/api/auth/google/', { email, name: email.split('@')[0] });
+      if (res.data?.token) localStorage.setItem('token', res.data.token);
+      if (res.data?.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+      setSuccess("Signed in with Google! Loading dashboard...");
+      setTimeout(() => navigate('/dashboard'), 400);
+    } catch (err) {
+      setError(err.response?.data?.error || "Google authentication failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    if (window.AppleID?.auth) {
+      try {
+        const resp = await window.AppleID.auth.signIn();
+        if (resp?.authorization?.id_token) {
+          const res = await axios.post('/api/auth/apple/', { identity_token: resp.authorization.id_token });
+          if (res.data?.token) localStorage.setItem('token', res.data.token);
+          if (res.data?.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+          navigate('/dashboard');
+          return;
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+    const email = prompt("Enter Apple ID email for Sign in with Apple:", "amelielaurent7622@gmail.com");
+    if (!email) return;
+    setLoading(true);
+    try {
+      const res = await axios.post('/api/auth/apple/', { email, name: "Apple User" });
+      if (res.data?.token) localStorage.setItem('token', res.data.token);
+      if (res.data?.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+      setSuccess("Signed in with Apple! Loading dashboard...");
+      setTimeout(() => navigate('/dashboard'), 400);
+    } catch (err) {
+      setError(err.response?.data?.error || "Apple authentication failed.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -210,6 +317,22 @@ export default function Login() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {!isRegister && (
+                  <div className="flex justify-end pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowForgotModal(true);
+                        setForgotStep(1);
+                        setForgotErr('');
+                        setForgotMsg('');
+                      }}
+                      className="text-[11px] font-medium text-stone-500 hover:text-stone-900 underline transition cursor-pointer"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Prominent Honey Yellow Pill Submit Button */}
@@ -225,7 +348,7 @@ export default function Login() {
               <div className="grid grid-cols-2 gap-3.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => handleDemoSignIn('hardik', 'admin123')}
+                  onClick={handleAppleLogin}
                   className="h-11 rounded-full bg-white/90 border border-stone-200/90 hover:bg-white hover:border-stone-300 text-stone-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-[0.99]"
                 >
                   {/* Apple Icon SVG */}
@@ -237,7 +360,7 @@ export default function Login() {
 
                 <button
                   type="button"
-                  onClick={() => handleDemoSignIn('hardikpamale.4', 'admin123')}
+                  onClick={handleGoogleLogin}
                   className="h-11 rounded-full bg-white/90 border border-stone-200/90 hover:bg-white hover:border-stone-300 text-stone-800 text-xs font-semibold flex items-center justify-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-[0.99]"
                 >
                   {/* Google Icon SVG */}
@@ -374,6 +497,139 @@ export default function Login() {
         </div>
 
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-[#fbf9f4] rounded-3xl w-full max-w-md p-7 shadow-2xl border border-stone-200/90 relative text-stone-900">
+            
+            {/* Modal Header */}
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-2xs">
+                  <KeyRound size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">Reset Password</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {forgotStep === 1 ? 'Verify account email to receive a reset token' : 'Set your new secure password'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="text-stone-400 hover:text-stone-700 p-1 rounded-xl hover:bg-stone-200/50 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Error & Info Messages */}
+            {forgotErr && (
+              <div className="mb-4 text-xs bg-rose-50 text-rose-700 px-3.5 py-2.5 rounded-2xl border border-rose-200/80 flex items-start gap-2">
+                <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-500" />
+                <span>{forgotErr}</span>
+              </div>
+            )}
+            {forgotMsg && (
+              <div className="mb-4 text-xs bg-emerald-50 text-emerald-800 px-3.5 py-2.5 rounded-2xl border border-emerald-200/80 flex items-start gap-2">
+                <CheckCircle2 size={15} className="shrink-0 mt-0.5 text-emerald-600" />
+                <span>{forgotMsg}</span>
+              </div>
+            )}
+
+            {/* Step 1: Request Token */}
+            {forgotStep === 1 && (
+              <form onSubmit={handleRequestReset} className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-medium text-stone-500 block mb-1.5">
+                    Account Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    placeholder="hardikpamale.4@gmail.com"
+                    className="w-full h-12 px-5 rounded-full bg-[#f4f2ea]/90 border border-stone-200/70 text-stone-900 text-sm focus:outline-none focus:bg-white focus:border-stone-400 focus:ring-2 focus:ring-amber-200/60 placeholder:text-stone-400 transition-all shadow-2xs"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotLoading || !forgotEmail}
+                  className="w-full h-12 bg-[#ffcc4d] hover:bg-[#fbc337] active:scale-[0.99] text-stone-900 font-semibold text-sm rounded-full shadow-sm shadow-amber-300/40 transition-all duration-200 cursor-pointer flex items-center justify-center mt-3 disabled:opacity-50"
+                >
+                  {forgotLoading ? 'Generating token...' : 'Request Reset Token'}
+                </button>
+              </form>
+            )}
+
+            {/* Step 2: Confirm Reset Token & Set New Password */}
+            {forgotStep === 2 && (
+              <form onSubmit={handleConfirmReset} className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-medium text-stone-500 block mb-1.5">
+                    Security Reset Token
+                  </label>
+                  <input
+                    type="text"
+                    value={forgotToken}
+                    onChange={(e) => setForgotToken(e.target.value)}
+                    required
+                    placeholder="Enter security token"
+                    className="w-full h-12 px-5 rounded-full bg-[#f4f2ea]/90 border border-stone-200/70 text-stone-900 text-sm focus:outline-none focus:bg-white focus:border-stone-400 focus:ring-2 focus:ring-amber-200/60 placeholder:text-stone-400 transition-all shadow-2xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium text-stone-500 block mb-1.5">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    required
+                    placeholder="Enter new password"
+                    className="w-full h-12 px-5 rounded-full bg-[#f4f2ea]/90 border border-stone-200/70 text-stone-900 text-sm focus:outline-none focus:bg-white focus:border-stone-400 focus:ring-2 focus:ring-amber-200/60 placeholder:text-stone-400 transition-all shadow-2xs"
+                  />
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep(1)}
+                    className="px-4 h-12 rounded-full border border-stone-200 hover:bg-stone-100 text-xs font-semibold text-stone-600 transition cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={forgotLoading || !forgotToken || !forgotNewPassword}
+                    className="flex-1 h-12 bg-[#ffcc4d] hover:bg-[#fbc337] active:scale-[0.99] text-stone-900 font-semibold text-sm rounded-full shadow-sm shadow-amber-300/40 transition-all duration-200 cursor-pointer flex items-center justify-center disabled:opacity-50"
+                  >
+                    {forgotLoading ? 'Updating password...' : 'Update Password'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <div className="mt-5 pt-4 border-t border-stone-200/60 text-center">
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="text-xs font-medium text-stone-500 hover:text-stone-900 underline transition cursor-pointer"
+              >
+                Cancel and return to sign in
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

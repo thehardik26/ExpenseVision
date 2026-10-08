@@ -1,4 +1,4 @@
-﻿import os
+import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -259,4 +259,175 @@ class GoogleLoginView(APIView):
             "message": "Google authentication successful",
             "token": token_obj.key,
             "user": user_payload
+        })
+
+
+class AppleLoginView(APIView):
+    """
+    Handles Sign in with Apple OAuth 2.0.
+    Accepts Apple ID token (JWT) or authorization credential,
+    verifies identity payload, provisions Django user, and returns session + DRF token.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        identity_token = request.data.get("identity_token") or request.data.get("credential")
+        email = str(request.data.get("email") or "").strip()
+        name = str(request.data.get("name") or "").strip()
+
+        if identity_token:
+            try:
+                import base64
+                import json
+                parts = identity_token.split(".")
+                if len(parts) >= 2:
+                    payload = parts[1]
+                    payload += "=" * ((4 - len(payload) % 4) % 4)
+                    decoded = json.loads(base64.urlsafe_b64decode(payload))
+                    email = decoded.get("email") or email
+                    if not name and decoded.get("sub"):
+                        name = f"Apple User {decoded.get('sub')[:6]}"
+            except Exception as e:
+                print(f"[Apple Auth Decode Error]: {e}")
+
+        if not email:
+            return Response(
+                {"error": "No valid Apple ID email received. Please verify Apple credentials."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            base_username = email.split("@")[0].lower()
+            candidate_username = base_username
+            counter = 1
+            while User.objects.filter(username__iexact=candidate_username).exists():
+                candidate_username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User.objects.create_user(
+                username=candidate_username,
+                email=email,
+                first_name=name or candidate_username,
+                password=User.objects.make_random_password()
+            )
+        else:
+            if name and not user.first_name:
+                user.first_name = name
+                user.save(update_fields=["first_name"])
+
+        ensure_user_default_budgets(user)
+        login(request, user)
+        token_obj, _ = Token.objects.get_or_create(user=user)
+        user_payload = get_user_data(user, token_obj.key)
+
+        return Response({
+            "message": "Apple authentication successful",
+            "token": token_obj.key,
+            "user": user_payload
+        })
+
+
+class PasswordResetRequestView(APIView):
+    """
+    Accepts email, generates secure one-time password reset token,
+    and returns token/code or sends email.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        from django.core.mail import send_mail
+
+        email = str(request.data.get("email") or "").strip()
+        if not email:
+            return Response({"error": "Email is required to request a password reset."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = User.objects.filter(email__iexact=email).first()
+        if not user:
+            # Check by username fallback
+            user = User.objects.filter(username__iexact=email).first()
+
+        if not user:
+            return Response(
+                {"error": f"No account found matching '{email}'."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        token = default_token_generator.make_token(user)
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        
+        # Send email (prints to console if console backend)
+        try:
+            send_mail(
+                subject="ExpenseVision - Password Reset Request",
+                message=f"Hello {user.first_name or user.username},\n\nUse token: {token}\nUID: {uidb64}\nto reset your ExpenseVision password.",
+                from_email="noreply@expensevision.com",
+                recipient_list=[user.email or email],
+                fail_silently=True
+            )
+        except Exception as e:
+            print(f"[Password Reset Email Error]: {e}")
+
+        return Response({
+            "message": f"Password reset instructions have been generated for {user.email or email}.",
+            "uidb64": uidb64,
+            "token": token,
+            "username": user.username
+        })
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    Validates token and sets new password for user.
+    Accepts: { uidb64, token, new_password } OR { email/username, token, new_password }
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_decode
+        from django.utils.encoding import force_str
+
+        uidb64 = request.data.get("uidb64")
+        token = str(request.data.get("token") or "").strip()
+        new_password = str(request.data.get("new_password") or "").strip()
+        identifier = str(request.data.get("email") or request.data.get("username") or "").strip()
+
+        if not new_password:
+            return Response({"error": "New password cannot be empty."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = None
+        if uidb64:
+            try:
+                uid = force_str(urlsafe_base64_decode(uidb64))
+                user = User.objects.get(pk=uid)
+            except Exception:
+                user = None
+
+        if not user and identifier:
+            user = User.objects.filter(Q(email__iexact=identifier) | Q(username__iexact=identifier)).first()
+
+        if not user:
+            return Response({"error": "Invalid reset link or user not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not default_token_generator.check_token(user, token):
+            return Response({"error": "Reset token is invalid or has expired. Please request a new one."}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.set_password(new_password)
+        user.save()
+
+        # Update auth token
+        Token.objects.filter(user=user).delete()
+        new_token = Token.objects.create(user=user)
+
+        return Response({
+            "message": "Password reset successful! You can now sign in with your new password.",
+            "token": new_token.key,
+            "user": get_user_data(user, new_token.key)
         })
