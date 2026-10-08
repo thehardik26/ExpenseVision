@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from decimal import Decimal
 from datetime import date
 from .ai_services import GeminiAIService
-from .utils import ensure_user_default_budgets
+from .utils import ensure_user_default_budgets, get_or_create_canonical_category
 
 from .models import Category, Transaction, Budget, AIChatHistory
 from .serializers import (
@@ -61,14 +61,28 @@ class BudgetViewSet(viewsets.ModelViewSet):
         if not user:
             user = User.objects.filter(is_superuser=True).first()
 
-        ensure_user_default_budgets(user)
-        return Budget.objects.filter(user=user)
+        today = date.today()
+        month = self.request.query_params.get("month")
+        year = self.request.query_params.get("year")
+
+        target_month = int(month) if (month and str(month).isdigit()) else today.month
+        target_year = int(year) if (year and str(year).isdigit()) else today.year
+
+        ensure_user_default_budgets(user, month=target_month, year=target_year)
+
+        qs = Budget.objects.filter(user=user, month=target_month, year=target_year)
+        if not qs.exists():
+            qs = Budget.objects.filter(user=user)
+        return qs
 
     def perform_create(self, serializer):
         user = self.request.user if (self.request.user and self.request.user.is_authenticated) else None
         if not user:
             user = User.objects.filter(is_superuser=True).first()
-        serializer.save(user=user)
+        today = date.today()
+        month = self.request.data.get("month") or today.month
+        year = self.request.data.get("year") or today.year
+        serializer.save(user=user, month=month, year=year)
 
     @action(detail=False, methods=["post"], url_path="set-total")
     def set_total(self, request):
@@ -89,24 +103,21 @@ class BudgetViewSet(viewsets.ModelViewSet):
             user = User.objects.filter(is_superuser=True).first()
 
         today = date.today()
-        current_month = today.month
-        current_year = today.year
+        current_month = int(request.data.get("month") or today.month)
+        current_year = int(request.data.get("year") or today.year)
 
         allocations = [
-            ("Housing", "Essential", "#3B82F6", "home", round(total_budget * Decimal("0.25"), 2)),
-            ("Food & Dining", "Essential", "#10B981", "utensils", round(total_budget * Decimal("0.20"), 2)),
-            ("Utilities", "Essential", "#06B6D4", "zap", round(total_budget * Decimal("0.10"), 2)),
-            ("Transportation", "Essential", "#6366F1", "car", round(total_budget * Decimal("0.10"), 2)),
-            ("Shopping", "Discretionary", "#F59E0B", "shopping-bag", round(total_budget * Decimal("0.15"), 2)),
-            ("Entertainment", "Discretionary", "#EC4899", "film", round(total_budget * Decimal("0.10"), 2)),
-            ("Health & Wellness", "Essential", "#14B8A6", "heart", round(total_budget * Decimal("0.10"), 2)),
+            ("Housing", round(total_budget * Decimal("0.25"), 2)),
+            ("Food & Drinks", round(total_budget * Decimal("0.20"), 2)),
+            ("Bills & Utilities", round(total_budget * Decimal("0.10"), 2)),
+            ("Transportation", round(total_budget * Decimal("0.10"), 2)),
+            ("Shopping", round(total_budget * Decimal("0.15"), 2)),
+            ("Entertainment", round(total_budget * Decimal("0.10"), 2)),
+            ("Health & Wellness", round(total_budget * Decimal("0.10"), 2)),
         ]
 
-        for cat_name, cat_type, color, icon, limit in allocations:
-            cat, _ = Category.objects.get_or_create(
-                name=cat_name,
-                defaults={"category_type": cat_type, "color": color, "icon": icon}
-            )
+        for cat_name, limit in allocations:
+            cat = get_or_create_canonical_category(cat_name)
             budget_obj, created = Budget.objects.get_or_create(
                 user=user,
                 category=cat,
@@ -118,7 +129,7 @@ class BudgetViewSet(viewsets.ModelViewSet):
                 budget_obj.monthly_limit = limit
                 budget_obj.save()
 
-        updated_budgets = Budget.objects.filter(user=user)
+        updated_budgets = Budget.objects.filter(user=user, month=current_month, year=current_year)
         serializer = BudgetSerializer(updated_budgets, many=True)
         return Response({
             "message": f"Total monthly budget of ₹{total_budget:,.2f} applied successfully!",
@@ -199,10 +210,46 @@ class DashboardSummaryView(APIView):
         recent_txs = user_txs[:5]
         recent_tx_serializer = TransactionSerializer(recent_txs, many=True)
 
+        ensure_user_default_budgets(user, month=current_month, year=current_year)
+
+        # Auto-create budget for any category where user has recorded expenses this month
+        active_cat_ids = user_txs.filter(
+            transaction_type="Expense",
+            date__year=current_year,
+            date__month=current_month
+        ).values_list("category_id", flat=True).distinct()
+
+        for cat_id in active_cat_ids:
+            cat = Category.objects.filter(id=cat_id).first()
+            if cat and not Budget.objects.filter(user=user, category=cat, month=current_month, year=current_year).exists():
+                Budget.objects.create(
+                    user=user,
+                    category=cat,
+                    month=current_month,
+                    year=current_year,
+                    monthly_limit=Decimal("5000.00")
+                )
+
         budgets = Budget.objects.filter(user=user, month=current_month, year=current_year)
         if not budgets.exists():
             budgets = Budget.objects.filter(user=user)
-        budget_serializer = BudgetSerializer(budgets, many=True)
+
+        # Sort budgets so categories with active spending in the current month appear first!
+        def get_active_spent(b):
+            cat_names = [b.category.name]
+            if b.category.name == "Food & Drinks":
+                cat_names.append("Food & Dining")
+            elif b.category.name == "Bills & Utilities":
+                cat_names.append("Utilities")
+            return float(user_txs.filter(
+                category__name__in=cat_names,
+                transaction_type="Expense",
+                date__year=current_year,
+                date__month=current_month
+            ).aggregate(t=Sum("amount"))["t"] or 0)
+
+        sorted_budgets = sorted(list(budgets), key=get_active_spent, reverse=True)
+        budget_serializer = BudgetSerializer(sorted_budgets, many=True)
 
         savings_pct_str = "0.0% of income"
         if income_total > 0:

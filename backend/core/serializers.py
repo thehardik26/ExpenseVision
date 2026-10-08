@@ -4,6 +4,8 @@ from django.db.models import Sum
 from decimal import Decimal
 
 
+from .utils import get_or_create_canonical_category
+
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
@@ -29,10 +31,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         data = data.copy() if hasattr(data, "copy") else dict(data)
         cat_input = data.get("category_name") or data.get("category")
         if cat_input and not str(cat_input).isdigit():
-            cat, _ = Category.objects.get_or_create(
-                name=str(cat_input).strip(),
-                defaults={"category_type": "Discretionary", "color": "#7C3AED", "icon": "tag"}
-            )
+            cat = get_or_create_canonical_category(str(cat_input).strip())
             data["category"] = cat.id
         return super().to_internal_value(data)
 
@@ -61,17 +60,24 @@ class BudgetSerializer(serializers.ModelSerializer):
         cat_input = data.get("category_name") or data.get("category")
         cat_type = data.get("category_type", "Essential")
         if cat_input and not str(cat_input).isdigit():
-            cat, _ = Category.objects.get_or_create(
-                name=str(cat_input).strip(),
-                defaults={"category_type": cat_type, "color": "#7C3AED", "icon": "tag"}
-            )
+            cat = get_or_create_canonical_category(str(cat_input).strip(), default_type=cat_type)
             data["category"] = cat.id
         return super().to_internal_value(data)
 
     def get_spent(self, obj):
+        cat_names = [obj.category.name]
+        if obj.category.name == "Food & Drinks":
+            cat_names.append("Food & Dining")
+        elif obj.category.name == "Bills & Utilities":
+            cat_names.append("Utilities")
+        elif obj.category.name == "Utilities":
+            cat_names.append("Bills & Utilities")
+        elif obj.category.name == "Food & Dining":
+            cat_names.append("Food & Drinks")
+
         total = Transaction.objects.filter(
             user=obj.user,
-            category=obj.category,
+            category__name__in=cat_names,
             transaction_type="Expense",
             date__year=obj.year,
             date__month=obj.month
