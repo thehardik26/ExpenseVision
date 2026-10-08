@@ -201,10 +201,30 @@ class DashboardSummaryView(APIView):
             expense_series.append(float(m_exp))
             income_series.append(float(m_inc))
 
+        # Dynamic weekly breakdown for the current month
+        week_labels = ["Week 1 (1-7)", "Week 2 (8-14)", "Week 3 (15-21)", "Week 4+ (22+)"]
+        week_expenses = [0.0, 0.0, 0.0, 0.0]
+        week_income = [0.0, 0.0, 0.0, 0.0]
+
+        cur_month_txs = user_txs.filter(date__year=current_year, date__month=current_month)
+        for tx in cur_month_txs:
+            day = tx.date.day
+            w_idx = 0 if day <= 7 else (1 if day <= 14 else (2 if day <= 21 else 3))
+            amt = float(tx.amount)
+            if tx.transaction_type == "Expense":
+                week_expenses[w_idx] += amt
+            elif tx.transaction_type == "Income":
+                week_income[w_idx] += amt
+
         monthly_series = {
             "labels": chart_labels,
             "expenses": expense_series,
-            "income": income_series
+            "income": income_series,
+            "weekly": {
+                "labels": week_labels,
+                "expenses": week_expenses,
+                "income": week_income
+            }
         }
 
         recent_txs = user_txs[:5]
@@ -289,7 +309,7 @@ class ReportsAnalyticsView(APIView):
         current_month = today.month
 
         user_txs = Transaction.objects.filter(user=user)
-        categories = Category.objects.filter(category_type__in=["Essential", "Discretionary"])
+        categories = Category.objects.exclude(category_type="Income")
         category_shares = []
 
         total_expense = user_txs.filter(transaction_type="Expense").aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
@@ -304,6 +324,9 @@ class ReportsAnalyticsView(APIView):
                     "percentage": pct,
                     "color": cat.color
                 })
+
+        # Sort category shares from highest spending to lowest
+        category_shares.sort(key=lambda x: x["amount"], reverse=True)
 
         month_abbr = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
         chart_labels = []
@@ -337,6 +360,27 @@ class ReportsAnalyticsView(APIView):
         total_expense_6m = sum(trend_expenses)
         net_savings_6m = total_income_6m - total_expense_6m
 
+        # Dynamic weekly breakdown for the current month
+        week_labels = ["Week 1 (1-7)", "Week 2 (8-14)", "Week 3 (15-21)", "Week 4+ (22+)"]
+        week_expenses = [0.0, 0.0, 0.0, 0.0]
+        week_income = [0.0, 0.0, 0.0, 0.0]
+
+        cur_month_txs = user_txs.filter(date__year=current_year, date__month=current_month)
+        for tx in cur_month_txs:
+            day = tx.date.day
+            w_idx = 0 if day <= 7 else (1 if day <= 14 else (2 if day <= 21 else 3))
+            amt = float(tx.amount)
+            if tx.transaction_type == "Expense":
+                week_expenses[w_idx] += amt
+            elif tx.transaction_type == "Income":
+                week_income[w_idx] += amt
+
+        weekly_analytics = {
+            "labels": week_labels,
+            "expenses": week_expenses,
+            "income": week_income
+        }
+
         return Response({
             "category_breakdown": category_shares,
             "six_month_summary": {
@@ -348,6 +392,12 @@ class ReportsAnalyticsView(APIView):
                 "labels": chart_labels,
                 "income": trend_income,
                 "expenses": trend_expenses
+            },
+            "expense_analytics": {
+                "labels": chart_labels,
+                "income": trend_income,
+                "expenses": trend_expenses,
+                "weekly": weekly_analytics
             }
         })
 
