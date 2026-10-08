@@ -2,12 +2,19 @@ import os
 import json
 import re
 import requests
+import io
 from decimal import Decimal
 from datetime import date
 from django.conf import settings
 from .models import Transaction, Budget, Category, AIChatHistory
 from django.contrib.auth.models import User
 from django.db.models import Sum
+
+try:
+    from PIL import Image, ImageOps
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 try:
     from google import genai
@@ -95,31 +102,65 @@ class GoogleGeminiService:
 
     def scan_receipt(self, image_file):
         """
-        Extracts merchant, amount, date, category, and items from a receipt image.
+        Extracts merchant, amount, date, category, tax, and notes from a receipt or bill image.
+        Uses multimodal Gemini Vision models with intelligent image orientation and resolution optimization.
         """
         if self.client and image_file:
             try:
-                image_bytes = image_file.read()
+                raw_bytes = image_file.read()
                 image_file.seek(0)  # Rewind file pointer for subsequent processing/storage
+                
+                # Image normalization via Pillow: auto-orient, RGB conversion, and resolution bounding
+                image_bytes = raw_bytes
                 mime_type = getattr(image_file, 'content_type', 'image/jpeg')
                 if not mime_type or mime_type == 'application/octet-stream':
                     mime_type = 'image/jpeg'
 
+                if PIL_AVAILABLE:
+                    try:
+                        with Image.open(io.BytesIO(raw_bytes)) as img:
+                            img = ImageOps.exif_transpose(img)
+                            if img.mode in ('RGBA', 'P'):
+                                img = img.convert('RGB')
+                            # Constrain max dimension to 1600px for high OCR accuracy + rapid upload
+                            if max(img.size) > 1600:
+                                img.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+                            buf = io.BytesIO()
+                            img.save(buf, format='JPEG', quality=92)
+                            image_bytes = buf.getvalue()
+                            mime_type = 'image/jpeg'
+                    except Exception as pil_err:
+                        print(f"[GoogleGeminiService] PIL preprocessing note: {pil_err}")
+                        image_bytes = raw_bytes
+
                 today_iso = str(date.today())
                 prompt = f"""
-                Analyze this bill, invoice, or receipt image carefully and extract financial details into JSON:
+                You are an expert financial OCR assistant. Analyze this bill, invoice, receipt, UPI payment screenshot, or voucher carefully.
+                Extract the financial transaction details into strict JSON matching this schema:
                 {{
-                  "merchant": "Store or Vendor Name",
+                  "merchant": "Store, Vendor, Biller, or App Name",
                   "amount": float,
-                  "date": "{today_iso}",
+                  "date": "YYYY-MM-DD",
                   "category": "Food & Drinks | Shopping | Transportation | Entertainment | Bills & Utilities | Housing | Groceries | Health & Wellness | Other",
                   "tax": float,
-                  "notes": "Brief summary of key items purchased"
+                  "notes": "Short item summary or purchase description"
                 }}
-                Extract the exact final total amount paid. If date is not found or ambiguous, use "{today_iso}".
-                Return ONLY valid JSON matching this schema.
+                Rules:
+                1. Look for the final Grand Total, Total Amount, or Paid Amount. Do not use subtotals if total is available.
+                2. Do not include currency symbols in the "amount" number (e.g. 450.00).
+                3. Ensure "date" is in "YYYY-MM-DD" format. If unclear or absent, use "{today_iso}".
+                4. Match the most accurate category from the 9 allowed options.
+                5. Return ONLY valid JSON.
                 """
-                for model_candidate in ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']:
+
+                # Active high-performance vision models
+                model_candidates = [
+                    'gemini-3.5-flash',
+                    'gemini-3.5-flash-lite',
+                    'gemini-3.1-flash-lite',
+                    'gemini-flash-latest'
+                ]
+                for model_candidate in model_candidates:
                     try:
                         response = self.client.models.generate_content(
                             model=model_candidate,
@@ -128,16 +169,31 @@ class GoogleGeminiService:
                                 prompt
                             ]
                         )
-                        raw_text = response.text.strip().replace('```json', '').replace('```', '')
-                        parsed = json.loads(raw_text)
-                        if parsed and 'amount' in parsed:
-                            try:
-                                parsed['amount'] = float(parsed['amount'])
-                            except (ValueError, TypeError):
-                                parsed['amount'] = 0.0
-                            if not parsed.get('date'):
-                                parsed['date'] = today_iso
-                            return parsed
+                        raw_text = response.text.strip()
+                        # Extract JSON object using regex
+                        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                        if json_match:
+                            parsed = json.loads(json_match.group(0))
+                            if parsed and isinstance(parsed, dict):
+                                try:
+                                    parsed['amount'] = float(parsed.get('amount') or 0.0)
+                                except (ValueError, TypeError):
+                                    parsed['amount'] = 0.0
+
+                                try:
+                                    parsed['tax'] = float(parsed.get('tax') or 0.0)
+                                except (ValueError, TypeError):
+                                    parsed['tax'] = 0.0
+
+                                if not parsed.get('date'):
+                                    parsed['date'] = today_iso
+                                if not parsed.get('merchant'):
+                                    parsed['merchant'] = 'Scanned Vendor'
+                                if not parsed.get('category'):
+                                    parsed['category'] = 'Shopping'
+
+                                parsed['is_ai_extracted'] = True
+                                return parsed
                     except Exception as model_err:
                         print(f"[Gemini Vision {model_candidate}]: {model_err}")
                         continue

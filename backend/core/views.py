@@ -405,11 +405,28 @@ ai_service = GeminiAIService()
 
 class ReceiptScanView(APIView):
     """
-    Accepts an uploaded receipt image and returns extracted fields.
-    If 'auto_save' is requested, also immediately creates and saves the Transaction in the user's ledger!
+    Accepts an uploaded receipt image (file or base64) and returns extracted fields via Gemini Vision OCR.
+    If 'auto_save' is requested and a valid amount was extracted, immediately records the Transaction to the user's ledger.
     """
     def post(self, request):
-        image_file = request.FILES.get("image")
+        image_file = (
+            request.FILES.get("image")
+            or request.FILES.get("receipt_image")
+            or request.FILES.get("file")
+        )
+
+        if not image_file and request.data.get("image_base64"):
+            import base64
+            from django.core.files.base import ContentFile
+            try:
+                b64_str = str(request.data["image_base64"])
+                if "base64," in b64_str:
+                    b64_str = b64_str.split("base64,")[1]
+                img_data = base64.b64decode(b64_str)
+                image_file = ContentFile(img_data, name="receipt_capture.jpg")
+            except Exception as b64_err:
+                print(f"[ReceiptScanView Base64 Decode Error]: {b64_err}")
+
         if not image_file:
             extracted_data = ai_service.scan_receipt(None)
         else:
@@ -418,7 +435,7 @@ class ReceiptScanView(APIView):
         auto_save_param = request.data.get("auto_save")
         if auto_save_param is None:
             auto_save_param = request.query_params.get("auto_save")
-        
+
         auto_save = False
         if isinstance(auto_save_param, bool):
             auto_save = auto_save_param
@@ -426,7 +443,9 @@ class ReceiptScanView(APIView):
             auto_save = auto_save_param.lower() in ("true", "1", "yes")
 
         saved_tx = None
-        if auto_save and extracted_data:
+        extracted_amt = float(extracted_data.get("amount") or 0.0) if extracted_data else 0.0
+
+        if auto_save and extracted_data and extracted_amt > 0:
             user = request.user if (request.user and request.user.is_authenticated) else None
             if not user:
                 user = User.objects.filter(is_superuser=True).first()
@@ -434,12 +453,12 @@ class ReceiptScanView(APIView):
             category_name = extracted_data.get("category", "Shopping")
             cat = get_or_create_canonical_category(category_name)
             try:
-                amount_val = Decimal(str(extracted_data.get("amount", 0.0)))
+                amount_val = Decimal(str(extracted_amt))
             except Exception:
                 amount_val = Decimal("0.00")
 
             date_val = extracted_data.get("date") or str(date.today())
-            merchant_val = extracted_data.get("merchant", "Receipt Purchase")
+            merchant_val = extracted_data.get("merchant") or "Scanned Receipt"
             notes_val = extracted_data.get("notes", "")
 
             try:
@@ -460,7 +479,7 @@ class ReceiptScanView(APIView):
             except Exception as e:
                 print(f"[ReceiptScanView auto_save error]: {e}")
 
-        response_data = dict(extracted_data)
+        response_data = dict(extracted_data) if extracted_data else {}
         if saved_tx:
             response_data["transaction"] = saved_tx
             response_data["saved"] = True

@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { Camera, X, UploadCloud, CheckCircle2, Sparkles, RefreshCw, FileText, ArrowRight, Check, AlertCircle } from 'lucide-react';
+import { Camera, X, UploadCloud, CheckCircle2, Sparkles, RefreshCw, FileText, ArrowRight, Check, AlertCircle, Copy, Image as ImageIcon } from 'lucide-react';
 
 const CATEGORIES = [
   'Food & Drinks',
@@ -21,7 +21,9 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [infoNotice, setInfoNotice] = useState('');
   const [autoSave, setAutoSave] = useState(false);
+  const [isAiVerified, setIsAiVerified] = useState(false);
 
   // Form fields for extracted bill
   const [merchant, setMerchant] = useState('');
@@ -33,6 +35,31 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   const [savedTx, setSavedTx] = useState(null);
 
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  // Clipboard paste listener (Ctrl+V)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePaste = (e) => {
+      if (step !== 'upload') return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type && items[i].type.startsWith('image/')) {
+          const pastedFile = items[i].getAsFile();
+          if (pastedFile) {
+            e.preventDefault();
+            processImageFile(pastedFile);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [isOpen, step]);
 
   if (!isOpen) return null;
 
@@ -43,6 +70,8 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
     setLoading(false);
     setSaving(false);
     setError('');
+    setInfoNotice('');
+    setIsAiVerified(false);
     setMerchant('');
     setAmount('');
     setCategory('Shopping');
@@ -59,6 +88,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
 
   const processImageFile = async (selectedFile, sampleName = null) => {
     setError('');
+    setInfoNotice('');
     setLoading(true);
     setStep('scanning');
 
@@ -85,12 +115,20 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       });
 
       const data = res.data;
-      setMerchant(data.merchant || 'Store Vendor');
-      setAmount(data.amount ? String(data.amount) : '0.00');
+      const parsedAmount = data.amount && Number(data.amount) > 0 ? String(data.amount) : '';
+      const parsedMerchant = data.merchant && data.merchant !== 'N/A' ? data.merchant : '';
+      
+      setMerchant(parsedMerchant || (sampleName ? sampleName : 'Store / Vendor'));
+      setAmount(parsedAmount);
       setCategory(CATEGORIES.includes(data.category) ? data.category : 'Shopping');
       setDate(data.date || new Date().toISOString().split('T')[0]);
       setNotes(data.notes || '');
-      setTax(data.tax ? String(data.tax) : '');
+      setTax(data.tax && Number(data.tax) > 0 ? String(data.tax) : '');
+      setIsAiVerified(Boolean(data.is_ai_extracted));
+
+      if (data.is_ai_extracted && (!parsedAmount || !parsedMerchant)) {
+        setInfoNotice('Gemini analyzed the image. Please verify or input the amount before saving.');
+      }
 
       if (data.saved && data.transaction) {
         setSavedTx(data.transaction);
@@ -101,12 +139,13 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
       }
     } catch (err) {
       console.error('Scan receipt error:', err);
-      setError('AI vision service could not parse the receipt image. You can still enter the details manually below.');
+      setError('Could not reach Gemini vision OCR. You can review and enter details manually below.');
       setMerchant(sampleName || 'Store Vendor');
       setAmount('350.00');
       setCategory('Food & Drinks');
       setDate(new Date().toISOString().split('T')[0]);
-      setNotes('Receipt scan entry');
+      setNotes('Receipt entry');
+      setIsAiVerified(false);
       setStep('review');
     } finally {
       setLoading(false);
@@ -155,7 +194,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
         
         {/* Modal Header */}
@@ -167,11 +206,12 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
                 AI Receipt & Bill Scanner
-                <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">
-                  Gemini Vision OCR
+                <span className="text-[10px] font-semibold bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Sparkles size={10} className="text-violet-600" />
+                  Gemini 3.5 Flash Vision
                 </span>
               </h3>
-              <p className="text-[11px] text-slate-400">Extracts total, date, vendor & saves to transactions</p>
+              <p className="text-[11px] text-slate-400">Extracts total, date, vendor & updates your ledger</p>
             </div>
           </div>
           <button 
@@ -191,9 +231,17 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
             </div>
           )}
 
+          {infoNotice && (
+            <div className="mb-4 text-xs bg-amber-50 border border-amber-200 text-amber-800 px-3.5 py-2.5 rounded-xl flex items-start gap-2">
+              <Sparkles size={15} className="shrink-0 mt-0.5 text-amber-600" />
+              <span>{infoNotice}</span>
+            </div>
+          )}
+
           {/* STEP 1: UPLOAD SCREEN */}
           {step === 'upload' && (
-            <div className="space-y-5">
+            <div className="space-y-4">
+              {/* Primary Dropzone */}
               <label 
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -201,7 +249,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                   const droppedFile = e.dataTransfer.files?.[0];
                   if (droppedFile) processImageFile(droppedFile);
                 }}
-                className="border-2 border-dashed border-violet-200 hover:border-violet-500 bg-violet-50/40 hover:bg-violet-50/80 rounded-2xl p-8 flex flex-col items-center justify-center cursor-pointer transition group text-center"
+                className="border-2 border-dashed border-violet-200 hover:border-violet-500 bg-violet-50/40 hover:bg-violet-50/80 rounded-2xl p-7 flex flex-col items-center justify-center cursor-pointer transition group text-center"
               >
                 <input 
                   ref={fileInputRef}
@@ -210,22 +258,51 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                   onChange={handleFileChange} 
                   className="hidden" 
                 />
-                <div className="w-14 h-14 rounded-2xl bg-white border border-violet-100 shadow-sm flex items-center justify-center text-violet-600 group-hover:scale-105 transition-transform mb-3">
-                  <UploadCloud size={28} />
+                <div className="w-13 h-13 rounded-2xl bg-white border border-violet-100 shadow-sm flex items-center justify-center text-violet-600 group-hover:scale-105 transition-transform mb-3">
+                  <UploadCloud size={26} />
                 </div>
                 <div className="text-sm font-bold text-slate-800">
-                  Click to upload or drag & drop bill image
+                  Upload Bill or Drag & Drop Here
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  Supports PNG, JPG, JPEG, WEBP receipts & invoices
+                  Supports PNG, JPG, JPEG, WEBP or Paste (<kbd className="font-mono bg-white px-1.5 py-0.5 rounded border border-slate-200 text-[10px]">Ctrl+V</kbd>)
                 </div>
               </label>
 
-              {/* Instant Sample Test Buttons */}
-              <div>
+              {/* Action Buttons: Camera Snap + Browse */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="h-11 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50/40 flex items-center justify-center gap-2 text-xs font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <Camera size={16} className="text-violet-600" />
+                  <span>Snap with Camera</span>
+                </button>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-11 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50/40 flex items-center justify-center gap-2 text-xs font-bold text-slate-700 transition cursor-pointer"
+                >
+                  <ImageIcon size={16} className="text-slate-500" />
+                  <span>Browse Photos</span>
+                </button>
+              </div>
+
+              {/* Realistic Preset Samples */}
+              <div className="pt-2">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <Sparkles size={12} className="text-amber-500" />
-                  Or quick-test with realistic bill samples:
+                  Or test with common Indian receipt templates:
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -234,7 +311,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                     className="p-2.5 rounded-xl border border-slate-200 hover:border-violet-300 hover:bg-violet-50/50 text-left transition text-xs cursor-pointer"
                   >
                     <div className="font-bold text-slate-800 truncate">☕ Starbucks</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">₹380.00 • Food</div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">₹380.00 • Cafe</div>
                   </button>
 
                   <button
@@ -274,21 +351,35 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
 
           {/* STEP 2: SCANNING IN PROGRESS */}
           {step === 'scanning' && (
-            <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 rounded-3xl bg-violet-100 border border-violet-200 flex items-center justify-center text-violet-600 animate-pulse">
-                  <Sparkles size={32} />
+            <div className="py-8 flex flex-col items-center justify-center text-center space-y-4">
+              {previewUrl ? (
+                <div className="relative w-40 h-48 rounded-2xl overflow-hidden border border-violet-200 shadow-lg bg-slate-100">
+                  <img
+                    src={previewUrl}
+                    alt="Scanning Preview"
+                    className="w-full h-full object-cover filter brightness-95"
+                  />
+                  {/* Glowing Laser Scan Bar */}
+                  <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-violet-500 to-transparent shadow-[0_0_12px_#8b5cf6] animate-bounce" />
                 </div>
-                <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-400 text-white flex items-center justify-center animate-spin">
-                  <RefreshCw size={12} />
+              ) : (
+                <div className="relative">
+                  <div className="w-16 h-16 rounded-3xl bg-violet-100 border border-violet-200 flex items-center justify-center text-violet-600 animate-pulse">
+                    <Sparkles size={32} />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-400 text-white flex items-center justify-center animate-spin">
+                    <RefreshCw size={12} />
+                  </div>
                 </div>
-              </div>
+              )}
+
               <div>
-                <h4 className="text-sm font-bold text-slate-800">
+                <h4 className="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
+                  <Sparkles size={16} className="text-violet-600 animate-spin" />
                   Gemini Vision OCR Analyzing Bill...
                 </h4>
                 <p className="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
-                  Extracting merchant name, total amount in ₹, transaction date, and budget category.
+                  Extracting merchant name, total in ₹, transaction date, and GST tax details.
                 </p>
               </div>
             </div>
@@ -302,19 +393,22 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                   <img 
                     src={previewUrl} 
                     alt="Receipt Thumbnail" 
-                    className="w-12 h-12 object-cover rounded-xl border border-violet-200 shadow-2xs" 
+                    className="w-12 h-12 object-cover rounded-xl border border-violet-200 shadow-2xs shrink-0" 
                   />
                 ) : (
-                  <div className="w-12 h-12 rounded-xl bg-violet-200/80 text-violet-700 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-xl bg-violet-200/80 text-violet-700 flex items-center justify-center shrink-0">
                     <FileText size={22} />
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-bold text-violet-900">Extracted from Bill</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-md font-bold">
-                      Ready to Add
-                    </span>
+                    {isAiVerified && (
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                        <Sparkles size={10} className="text-emerald-600" />
+                        AI Verified
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-violet-700/80 truncate">
                     Review and verify details before saving to your ledger.
@@ -333,7 +427,7 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                     value={merchant}
                     onChange={(e) => setMerchant(e.target.value)}
                     required
-                    placeholder="Store Name"
+                    placeholder="e.g. Starbucks, Amazon"
                     className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200"
                   />
                 </div>
@@ -388,7 +482,23 @@ export default function ReceiptScannerModal({ isOpen, onClose }) {
                   />
                 </div>
 
-                <div className="col-span-2">
+                {tax ? (
+                  <div className="col-span-2 sm:col-span-1">
+                    <label className="text-[11px] font-bold text-slate-600 block mb-1">
+                      Tax / GST Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={tax}
+                      onChange={(e) => setTax(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-normal text-slate-800 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200"
+                    />
+                  </div>
+                ) : null}
+
+                <div className={tax ? "col-span-2 sm:col-span-1" : "col-span-2"}>
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">
                     Items / Notes (Optional)
                   </label>
