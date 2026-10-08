@@ -36,9 +36,9 @@
 
 ## 📸 Interface Preview
 
-| Financial Dashboard | Secure Authentication |
-| :---: | :---: |
-| <img src="docs/screenshots/dashboard.png" width="480" alt="Dashboard" /> | <img src="docs/screenshots/login.png" width="480" alt="Login & Sign In" /> |
+| Financial Dashboard | Financial Overview & Analytics | Editorial Authentication |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/dashboard.png" width="380" alt="Financial Dashboard" /> | <img src="docs/screenshots/reports.png" width="380" alt="Financial Overview & Analytics" /> | <img src="docs/screenshots/login.png" width="380" alt="Login & Sign In" /> |
 
 ---
 
